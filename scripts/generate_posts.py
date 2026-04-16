@@ -24,7 +24,7 @@ Do not write a generic discussion post. The format and tone above are mandatory.
 {recent_section}
 Respond with ONLY a JSON object with these exact fields:
 - title (string, max 300 chars, the post title)
-- body (string, the post body — 1-4 paragraphs OR empty string "" for title-only posts; about 30% should be title-only)
+- body (string, the post body — {min_paragraph}-{max_paragraph} paragraphs OR empty string "" for title-only posts; about 10% should be title-only)
 - flair (string or null, a relevant flair tag like "Discussion", "News", "Question", "Rant", etc.)
 
 No other text. Just the JSON object."""
@@ -187,6 +187,7 @@ def main():
             if style_prompt:
                 recent_section += f"\nPosting style for this community:\n{style_prompt}\n"
 
+            min_paragraphs = random.randint(1,3)
             prompt = PROMPT_TEMPLATE.format(
                 display_name=user["display_name"],
                 age=user.get("age") or "unknown",
@@ -201,6 +202,8 @@ def main():
                 emotional_register=tone,
                 post_angle=angle,
                 recent_section=recent_section,
+                min_paragraph=min_paragraphs,
+                max_paragraph=random.randint(min_paragraphs, 2*min_paragraphs+1),
             )
 
             raw = ollama_generate(prompt)
