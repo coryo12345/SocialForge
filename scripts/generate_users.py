@@ -107,8 +107,8 @@ def main():
             failed += 1
             print("FAILED")
 
-        # Batch insert every 20 users or at the end
-        if len(users_batch) >= 20 or (i == args.count - 1 and users_batch):
+        # Batch insert users or at the end
+        if len(users_batch) >= 5 or (i == args.count - 1 and users_batch):
             resp = req.post(
                 f"{APP_API_URL}/internal/users/bulk",
                 json={"users": users_batch},

@@ -2,8 +2,11 @@ import Database from 'better-sqlite3';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { config } from './config.js';
+import { mkdirSync } from 'fs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const dbDir = path.dirname(config.DB_PATH);
+mkdirSync(dbDir, {recursive: true});
 const resolvedPath = path.resolve(__dirname, config.DB_PATH);
 
 const db = new Database(resolvedPath);
