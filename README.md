@@ -4,6 +4,13 @@ A self-hosted, AI-generated social media simulator. Generates and displays a con
 
 ---
 
+## TODOs
+- member count for community shows as 0 when viewing post
+- nuclearrevenge/pettyrevenge descriptions is NOT prompting for the right content lol
+- Community images (generate locally)
+- User images (create locally? or store a few)
+- favicon
+
 ## Prerequisites
 
 - Node.js 24+

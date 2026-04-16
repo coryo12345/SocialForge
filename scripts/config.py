@@ -2,8 +2,12 @@ import os
 import json
 import requests
 
-OLLAMA_BASE_URL  = os.getenv("OLLAMA_URL",        "http://localhost:11434")
-OLLAMA_MODEL     = os.getenv("OLLAMA_MODEL",      "llama3.1:8b")
+# windows loopback (get ip with: ` ip route show | grep -i default | awk '{print $3}' `)
+OLLAMA_BASE_URL  = os.getenv("OLLAMA_URL",        "http://172.30.160.1:11434")# "http://localhost:11434")
+
+# normal ollama url
+# OLLAMA_BASE_URL  = os.getenv("OLLAMA_URL",        "http://localhost:11434")
+OLLAMA_MODEL     = os.getenv("OLLAMA_MODEL",      "gemma4:e2b")
 APP_API_URL      = os.getenv("APP_API_URL",       "http://localhost:3001/api")
 INTERNAL_API_KEY = os.getenv("INTERNAL_API_KEY",  "dev-internal-key")
 
