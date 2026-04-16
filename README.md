@@ -12,6 +12,7 @@ A self-hosted, AI-generated social media simulator. Generates and displays a con
 - favicon
 - place in app to view users
 - place to view all communities
+- migrations system
 
 ## Prerequisites
 

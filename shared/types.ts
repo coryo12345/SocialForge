@@ -42,6 +42,8 @@ export interface Community {
   rules: string | null;              // JSON-encoded string[]
   tags: string | null;               // JSON-encoded string[]
   member_count: number;
+  post_style_prompt: string | null;
+  is_narrative: 0 | 1;
   created_at: number;
 }
 

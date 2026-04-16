@@ -53,15 +53,15 @@ router.post('/communities/bulk', (req, res) => {
   const insert = db.prepare(
     `INSERT OR IGNORE INTO communities
        (name, display_name, description, sidebar_text, icon_seed,
-        banner_color, rules, tags, member_count, created_at)
+        banner_color, rules, tags, member_count, post_style_prompt, is_narrative, created_at)
      VALUES
        (@name, @display_name, @description, @sidebar_text, @icon_seed,
-        @banner_color, @rules, @tags, @member_count, @created_at)`,
+        @banner_color, @rules, @tags, @member_count, @post_style_prompt, @is_narrative, @created_at)`,
   );
 
   const communityDefaults = {
     description: null, sidebar_text: null, rules: null, tags: null,
-    banner_color: '#c4730a', member_count: 0,
+    banner_color: '#c4730a', member_count: 0, post_style_prompt: null, is_narrative: 0,
   };
 
   const bulkInsert = db.transaction((rows: Record<string, unknown>[]) => {

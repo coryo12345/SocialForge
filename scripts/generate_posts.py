@@ -7,7 +7,10 @@ import json
 import datetime
 import requests as req
 from config import APP_API_URL, INTERNAL_HEADERS, ollama_generate, extract_json
-from random_seed import POST_FORMATS, EMOTIONAL_REGISTERS, POST_ANGLES
+from random_seed import (
+    POST_FORMATS, EMOTIONAL_REGISTERS, POST_ANGLES,
+    NARRATIVE_POST_FORMATS, NARRATIVE_EMOTIONAL_REGISTERS, NARRATIVE_POST_ANGLES,
+)
 
 PROMPT_TEMPLATE = """You are {display_name}, a {age}-year-old {occupation} from {location}.
 Your personality: {personality}. You write online like this: {communication_style}.
@@ -147,14 +150,23 @@ def main():
             personality = json.loads(user.get("personality") or "[]")
             interests = json.loads(user.get("interests") or "[]")
 
-            fmt = random.choice(POST_FORMATS)
-            tone = random.choice(EMOTIONAL_REGISTERS)
-            angle = random.choice(POST_ANGLES)
+            is_narrative = bool(community.get("is_narrative"))
+            style_prompt = community.get("post_style_prompt") or ""
+            if is_narrative:
+                fmt = random.choice(NARRATIVE_POST_FORMATS)
+                tone = random.choice(NARRATIVE_EMOTIONAL_REGISTERS)
+                angle = random.choice(NARRATIVE_POST_ANGLES)
+            else:
+                fmt = random.choice(POST_FORMATS)
+                tone = random.choice(EMOTIONAL_REGISTERS)
+                angle = random.choice(POST_ANGLES)
             recent = fetch_recent_post_titles(community["name"])
             recent_section = (
                 f"Do not write about any of these recently posted topics: {recent}\n"
                 if recent else ""
             )
+            if style_prompt:
+                recent_section += f"\nPosting style for this community:\n{style_prompt}\n"
 
             prompt = PROMPT_TEMPLATE.format(
                 display_name=user["display_name"],

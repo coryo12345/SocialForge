@@ -64,11 +64,31 @@ POST_FORMATS = [
     "asking if they're the asshole", "celebrating a small personal win",
 ]
 
+NARRATIVE_POST_FORMATS = [
+    "a first-person story with a clear setup, escalating conflict, and satisfying payoff",
+    "a revenge story told chronologically with specific details and a triumphant ending",
+    "a story where you detail exactly what the other person did and precisely how you responded",
+    "a blow-by-blow account of an incident that ended in your favor",
+    "a story that starts with 'so this happened' and escalates into chaos",
+    "a story recounting a situation where you kept your cool and let the consequences unfold",
+    "a confession of something you did in retaliation that you have zero regrets about",
+    "an update post where you describe the original offense and then how you got back at them",
+    "a story told with escalating detail where the ending is proportionally satisfying",
+    "a tale of a workplace, neighbor, or stranger conflict that you won decisively",
+]
+
 EMOTIONAL_REGISTERS = [
     "exhausted", "smug", "genuinely confused", "low-key furious",
     "surprisingly vulnerable", "defensive", "overly enthusiastic",
     "resigned", "vindicated", "anxious", "bittersweet", "petty",
     "deadpan", "earnest to a fault", "barely concealing contempt",
+]
+
+NARRATIVE_EMOTIONAL_REGISTERS = [
+    "smugly satisfied", "vindicated and a little proud", "still fuming but triumphant",
+    "amused in retrospect", "gleefully petty", "calmly devastating",
+    "can't believe it worked", "zero regrets", "lowkey villain energy",
+    "telling this story for the tenth time because it's that good",
 ]
 
 POST_ANGLES = [
@@ -78,6 +98,17 @@ POST_ANGLES = [
     "as someone who has done extensive amateur research on this",
     "from a very regional or local perspective",
     "as someone who is slightly out of touch with current norms",
+]
+
+NARRATIVE_POST_ANGLES = [
+    "with specific names changed but every other detail intact",
+    "with way too much satisfying detail about the other person's reaction",
+    "starting with what made them snap and ending with the beautiful consequences",
+    "while making it clear they would absolutely do it again",
+    "with the setup taking twice as long as the payoff, which is still worth it",
+    "as someone who waited patiently for the perfect moment",
+    "while casually mentioning it happened years ago but they still think about it fondly",
+    "noting that witnesses or bystanders were delighted by what unfolded",
 ]
 
 

@@ -40,8 +40,10 @@ db.exec(`
     banner_color    TEXT    NOT NULL DEFAULT '#c4730a',
     rules           TEXT,
     tags            TEXT,
-    member_count    INTEGER NOT NULL DEFAULT 0,
-    created_at      INTEGER NOT NULL
+    member_count      INTEGER NOT NULL DEFAULT 0,
+    post_style_prompt TEXT,
+    is_narrative      INTEGER NOT NULL DEFAULT 0,
+    created_at        INTEGER NOT NULL
   );
 
   CREATE TABLE IF NOT EXISTS posts (
