@@ -1,0 +1,87 @@
+@import "tailwindcss";
+@import "@fontsource-variable/inter";
+@import "@fontsource/jetbrains-mono";
+
+@theme inline {
+  --color-bg-primary:     var(--bg-primary);
+  --color-bg-secondary:   var(--bg-secondary);
+  --color-bg-tertiary:    var(--bg-tertiary);
+  --color-border:         var(--border-color);
+  --color-text-primary:   var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-accent:         var(--accent);
+  --color-accent-hover:   var(--accent-hover);
+  --color-upvote:         var(--upvote);
+  --color-downvote:       var(--downvote);
+  --color-link:           var(--link);
+  --color-tag-bg:         var(--tag-bg);
+
+  --font-sans: "Inter Variable", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+}
+
+/* Light mode (default) */
+:root {
+  --bg-primary:     #f7f4ef;
+  --bg-secondary:   #ffffff;
+  --bg-tertiary:    #ede9e2;
+  --border-color:   #d6cfc4;
+  --text-primary:   #1a1e2a;
+  --text-secondary: #6b6760;
+  --accent:         #c4730a;
+  --accent-hover:   #a85f06;
+  --upvote:         #c4730a;
+  --downvote:       #4a6db5;
+  --link:           #1d6bbf;
+  --tag-bg:         #e8f0f8;
+}
+
+/* Dark mode */
+.dark {
+  --bg-primary:     #0d1117;
+  --bg-secondary:   #161b27;
+  --bg-tertiary:    #1e2535;
+  --border-color:   #2a3040;
+  --text-primary:   #e2e8f0;
+  --text-secondary: #7c879a;
+  --accent:         #f09d2e;
+  --accent-hover:   #d4860f;
+  --upvote:         #f09d2e;
+  --downvote:       #7b9cdd;
+  --link:           #60aff5;
+  --tag-bg:         #1e2d40;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  margin: 0;
+  min-height: 100vh;
+}
+
+/* Smooth theme transitions */
+*,
+*::before,
+*::after {
+  transition-property: background-color, border-color, color;
+  transition-duration: 150ms;
+  transition-timing-function: ease;
+}
+
+/* Disable transition on interactive elements to avoid lag */
+button,
+a,
+input {
+  transition: none;
+}
