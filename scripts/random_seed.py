@@ -55,6 +55,32 @@ USER_CATEGORIES = [
     USER_SEED_WORDS[90:100], # politics
 ]
 
+POST_FORMATS = [
+    "a rant", "a confession", "a humble-brag", "a request for advice",
+    "a hot take", "an update to a previous situation", "a milestone announcement",
+    "a question they already know the answer to", "venting without wanting advice",
+    "sharing something they found", "a detailed how-to", "a wronged customer complaint",
+    "a long personal story with a mundane conclusion", "defending an unpopular position",
+    "asking if they're the asshole", "celebrating a small personal win",
+]
+
+EMOTIONAL_REGISTERS = [
+    "exhausted", "smug", "genuinely confused", "low-key furious",
+    "surprisingly vulnerable", "defensive", "overly enthusiastic",
+    "resigned", "vindicated", "anxious", "bittersweet", "petty",
+    "deadpan", "earnest to a fault", "barely concealing contempt",
+]
+
+POST_ANGLES = [
+    "through the lens of their job", "as someone who learned this the hard way",
+    "as an outsider to this community", "as someone who changed their mind recently",
+    "with way too much specific detail", "while clearly leaving out key information",
+    "as someone who has done extensive amateur research on this",
+    "from a very regional or local perspective",
+    "as someone who is slightly out of touch with current norms",
+]
+
+
 def random_user_seeds(n=3):
     chosen_categories = random.sample(USER_CATEGORIES, n)
     return [random.choice(cat) for cat in chosen_categories]

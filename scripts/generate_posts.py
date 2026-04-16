@@ -7,13 +7,18 @@ import json
 import datetime
 import requests as req
 from config import APP_API_URL, INTERNAL_HEADERS, ollama_generate, extract_json
+from random_seed import POST_FORMATS, EMOTIONAL_REGISTERS, POST_ANGLES
 
 PROMPT_TEMPLATE = """You are {display_name}, a {age}-year-old {occupation} from {location}.
 Your personality: {personality}. You write online like this: {communication_style}.
 Your interests include: {interests}.
 
-Write a Reddit-style post for the community r/{community_name} which is about: {community_topic}.
+Write {post_format} in r/{community_name} (topic: {community_topic}).
+Emotional register: {emotional_register}.
+Write it {post_angle}.
 
+Do not write a generic discussion post. The format and tone above are mandatory.
+{recent_section}
 Respond with ONLY a JSON object with these exact fields:
 - title (string, max 300 chars, the post title)
 - body (string, the post body — 1-4 paragraphs OR empty string "" for title-only posts; about 30% should be title-only)
@@ -58,6 +63,27 @@ def weighted_distribution(communities: list, count: int) -> list[dict]:
         idx = random.choices(range(len(communities)), weights=weights)[0]
         alloc[idx] = alloc.get(idx, 0) + 1
     return [{"community": communities[i], "count": n} for i, n in alloc.items()]
+
+
+_recent_titles_cache: dict[str, list[str]] = {}
+
+
+def fetch_recent_post_titles(community_name: str, limit: int = 10) -> list[str]:
+    if community_name in _recent_titles_cache:
+        return _recent_titles_cache[community_name]
+    try:
+        resp = req.get(
+            f"{APP_API_URL}/communities/{community_name}/posts",
+            params={"sort": "new", "limit": limit},
+            timeout=10,
+        )
+        if resp.ok:
+            titles = [p["title"] for p in resp.json().get("items", [])]
+            _recent_titles_cache[community_name] = titles
+            return titles
+    except Exception:
+        pass
+    return []
 
 
 def fetch_random_user() -> dict | None:
@@ -121,6 +147,15 @@ def main():
             personality = json.loads(user.get("personality") or "[]")
             interests = json.loads(user.get("interests") or "[]")
 
+            fmt = random.choice(POST_FORMATS)
+            tone = random.choice(EMOTIONAL_REGISTERS)
+            angle = random.choice(POST_ANGLES)
+            recent = fetch_recent_post_titles(community["name"])
+            recent_section = (
+                f"Do not write about any of these recently posted topics: {recent}\n"
+                if recent else ""
+            )
+
             prompt = PROMPT_TEMPLATE.format(
                 display_name=user["display_name"],
                 age=user.get("age") or "unknown",
@@ -131,6 +166,10 @@ def main():
                 interests=", ".join(interests) if interests else "various topics",
                 community_name=community["name"],
                 community_topic=community.get("description") or community["name"],
+                post_format=fmt,
+                emotional_register=tone,
+                post_angle=angle,
+                recent_section=recent_section,
             )
 
             raw = ollama_generate(prompt)
