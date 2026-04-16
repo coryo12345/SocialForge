@@ -216,7 +216,7 @@ Insert these rows on first migration:
 | `hot_score_decay_hours` | 12 | Hot score half-life (hours) | Feed Algorithm | number |
 | `score_update_interval_minutes` | 15 | Score update job interval | Feed Algorithm | number |
 | `viral_post_probability` | 0.05 | Chance of a viral post | Feed Algorithm | number |
-| `ollama_model` | llama3.1:8b | Ollama model name | Generation | string |
+| `ollama_model` | gemma4:e2b | Ollama model name | Generation | string |
 | `ollama_temperature` | 0.8 | LLM temperature | Generation | number |
 | `default_post_sort` | hot | Default feed sort | Display | select |
 | `posts_per_page` | 25 | Posts per page | Display | number |

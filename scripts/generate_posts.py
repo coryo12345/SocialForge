@@ -44,6 +44,24 @@ def random_score() -> tuple[int, int, int]:
     return score, upvotes, downvotes
 
 
+def flush_posts(batch: list) -> int:
+    if not batch:
+        return 0
+    resp = req.post(
+        f"{APP_API_URL}/internal/posts/bulk",
+        json={"posts": batch},
+        headers=INTERNAL_HEADERS,
+        timeout=30,
+    )
+    if resp.ok:
+        inserted = resp.json().get("inserted", 0)
+        print(f"  Inserted batch of {inserted}")
+        return inserted
+    else:
+        print(f"  FAILED batch insert: {resp.status_code} {resp.text}")
+        return 0
+
+
 def random_scheduled_at(date: datetime.date) -> int:
     """Return a Unix timestamp within the given date, weighted toward daytime hours."""
     # Hours 9-22 get 3x weight, hour 23 gets 2x, hours 0-8 get 1x
@@ -133,7 +151,8 @@ def main():
         return
 
     distribution = weighted_distribution(communities, args.count)
-    all_posts = []
+    batch = []
+    total_inserted = 0
     now = int(time.time())
     generated = 0
     failed = 0
@@ -193,7 +212,7 @@ def main():
                 continue
 
             score, upvotes, downvotes = random_score()
-            all_posts.append({
+            batch.append({
                 "community_name": community["name"],
                 "username": user["username"],
                 "title": str(data["title"])[:300],
@@ -210,25 +229,17 @@ def main():
             generated += 1
             title_preview = str(data["title"])[:60]
             print(f"  [{community['name']}] {title_preview}")
+            if len(batch) >= 5:
+                total_inserted += flush_posts(batch)
+                batch.clear()
 
-    if not all_posts:
+    if generated == 0:
         print("No posts generated.")
         return
 
-    print(f"\nInserting {len(all_posts)} posts...", end=" ", flush=True)
-    resp = req.post(
-        f"{APP_API_URL}/internal/posts/bulk",
-        json={"posts": all_posts},
-        headers=INTERNAL_HEADERS,
-        timeout=30,
-    )
-    if resp.ok:
-        result = resp.json()
-        print(f"ok ({result.get('inserted', '?')} inserted)")
-    else:
-        print(f"FAILED: {resp.status_code} {resp.text}")
+    total_inserted += flush_posts(batch)
 
-    print(f"\nSummary: {generated} generated, {failed} failed, date={target_date}")
+    print(f"\nSummary: {generated} generated, {total_inserted} inserted, {failed} failed, date={target_date}")
 
 
 if __name__ == "__main__":
