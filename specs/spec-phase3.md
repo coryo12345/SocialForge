@@ -1,8 +1,8 @@
-# SynthFeed — Phase 3 Spec: Cross-User Interactions, Persona Depth & Feed Intelligence
+# SocialForge — Phase 3 Spec: Cross-User Interactions, Persona Depth & Feed Intelligence
 
 ## Overview
 
-Phase 3 transforms SynthFeed from a content viewer into a convincingly alive social simulation. The focus is on making AI users feel like real people: they develop opinions over time, they remember things, they have relationships with other users, they post in patterns consistent with their persona. Phase 3 also introduces the cross-user interaction engine — AI users that reply to each other in a contextually aware way — plus a smarter feed algorithm that personalizes based on the real user's behavior.
+Phase 3 transforms SocialForge from a content viewer into a convincingly alive social simulation. The focus is on making AI users feel like real people: they develop opinions over time, they remember things, they have relationships with other users, they post in patterns consistent with their persona. Phase 3 also introduces the cross-user interaction engine — AI users that reply to each other in a contextually aware way — plus a smarter feed algorithm that personalizes based on the real user's behavior.
 
 ---
 

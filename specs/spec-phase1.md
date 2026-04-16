@@ -1,4 +1,4 @@
-# SynthFeed — Phase 1 Spec: Reddit-Style MVP
+# SocialForge — Phase 1 Spec: Reddit-Style MVP
 
 ## Overview
 
@@ -9,7 +9,7 @@ Phase 1 delivers a fully functional, mobile-first Progressive Web App that displ
 ## Repository Structure
 
 ```
-synthfeed/
+SocialForge/
 ├── server/
 │   ├── index.js                  # Entry point
 │   ├── db.js                     # SQLite connection + migrations
@@ -60,7 +60,7 @@ synthfeed/
 │   └── generate_posts.py
 │
 ├── data/
-│   └── synthfeed.db              # SQLite database (gitignored)
+│   └── SocialForge.db              # SQLite database (gitignored)
 │
 └── README.md
 ```
@@ -201,7 +201,7 @@ Allow requests from the Vite dev server (`http://localhost:5173`) and any local 
 
 ### Session Middleware
 
-Sessions are stored in the SQLite `sessions` table. A session cookie (`synthfeed_sid`) is set on login and read on every request. The middleware attaches `req.user` (the full user row) if a valid session exists. All feed/post/comment endpoints work without a session (read-only); votes require a session.
+Sessions are stored in the SQLite `sessions` table. A session cookie (`SocialForge_sid`) is set on login and read on every request. The middleware attaches `req.user` (the full user row) if a valid session exists. All feed/post/comment endpoints work without a session (read-only); votes require a session.
 
 ---
 
@@ -283,7 +283,7 @@ These endpoints are used exclusively by the generation scripts. They should be p
 
 ### PWA Configuration
 
-- App name: "SynthFeed"
+- App name: "SocialForge"
 - Theme color: `#1a1a1b` (Reddit-dark-inspired)
 - Display: `standalone`
 - Icons: 192x192 and 512x512 (generated placeholder icons are fine for Phase 1)
@@ -328,7 +328,7 @@ All routes except `/login` are accessible without a session (read-only).
 #### `<Navbar />`
 
 - Fixed top bar on mobile, height 48px
-- Left: SynthFeed logo/wordmark
+- Left: SocialForge logo/wordmark
 - Center (desktop only): search bar stub (non-functional in Phase 1, visually present)
 - Right: current username + avatar if logged in, else "Log In" button
 - Bottom navigation bar on mobile (Home, Communities, Profile icons)
@@ -466,7 +466,7 @@ COMMUNITY_SEEDS = [
     {"name": "personalfinance",  "topic": "budgeting, investing, money advice"},
     {"name": "programming",      "topic": "software development"},
     {"name": "dataisbeautiful",  "topic": "data visualization and interesting stats"},
-    {"name": "asksynth",         "topic": "open questions for the community"},
+    {"name": "askforge",         "topic": "open questions for the community"},
     {"name": "todayilearned",    "topic": "interesting facts and TIL posts"},
     {"name": "showerthoughts",   "topic": "random musings and observations"},
     {"name": "unpopularopinion", "topic": "contrarian takes"},
@@ -483,6 +483,17 @@ COMMUNITY_SEEDS = [
     {"name": "environment",      "topic": "climate and sustainability"},
     {"name": "conspiracy",       "topic": "conspiracy theories (satirical)"},
     {"name": "mildlyinteresting","topic": "things that are mildly interesting"},
+    {"name": "aita",             "topic": ""},
+    {"name": "tifu",             "topic": ""},
+    {"name": "pettyrevenge",     "topic": ""},
+    {"name": "nuclearrevenge",   "topic": ""},
+    {"name": "maliciouscompliance","topic": ""},
+    {"name": "relationshipadvice","topic": ""},
+    {"name": "amioverreacting",  "topic": ""},
+    {"name": "bridezillas",      "topic": ""},
+    {"name": "rpghorrorstories", "topic": ""},
+    {"name": "idontworkherelady","topic": ""},
+    {"name": "entitledpeople",   "topic": ""}
 ]
 ```
 
@@ -552,7 +563,7 @@ def random_score():
 
 ```
 PORT=3001
-DB_PATH=../data/synthfeed.db
+DB_PATH=../data/SocialForge.db
 INTERNAL_API_KEY=dev-internal-key
 SESSION_SECRET=change-me-in-production
 CORS_ORIGIN=http://localhost:5173

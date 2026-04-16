@@ -1,4 +1,4 @@
-# SynthFeed — Phase 2 Spec: Comments, Popularity & Settings
+# SocialForge — Phase 2 Spec: Comments, Popularity & Settings
 
 ## Overview
 

@@ -1,8 +1,8 @@
-# SynthFeed — Master Project Overview
+# SocialForge — Master Project Overview
 
 ## What Is This?
 
-SynthFeed is a self-hosted, AI-generated social media simulator. It is a personal tool — a single-user app you run on your own machine — that generates and displays a continuous stream of fake social media content powered by local LLMs. Think of it as a sandbox social network where every user, post, and comment is AI-generated.
+SocialForge is a self-hosted, AI-generated social media simulator. It is a personal tool — a single-user app you run on your own machine — that generates and displays a continuous stream of fake social media content powered by local LLMs. Think of it as a sandbox social network where every user, post, and comment is AI-generated.
 
 The goal is to simulate the experience of scrolling through Reddit, TikTok, and YouTube with a realistic content stream — without any of the real-world noise, algorithms, or data concerns.
 
@@ -16,7 +16,7 @@ The goal is to simulate the experience of scrolling through Reddit, TikTok, and 
 │                                                                  │
 │  ┌─────────────┐     ┌─────────────┐     ┌──────────────────┐   │
 │  │  React PWA  │────▶│ Express API │────▶│   SQLite (DB)    │   │
-│  │  (Vite)     │     │ (Node.js)   │     │ synthfeed.db     │   │
+│  │  (Vite)     │     │ (Node.js)   │     │ SocialForge.db     │   │
 │  │  Port 5173  │     │  Port 3001  │     └──────────────────┘   │
 │  └─────────────┘     └─────────────┘                            │
 │                              ▲                                   │
@@ -53,7 +53,7 @@ All components run locally. The React app and the API can be accessed from any d
 
 | Layer | Technology | Why |
 |-------|-----------|-----|
-| Backend | Node.js 20 + Express | Lightweight, fast, easy SQLite integration |
+| Backend | Node.js 24 + Express | Lightweight, fast, easy SQLite integration |
 | Database | SQLite via better-sqlite3 | Zero-config, single file, perfect for personal apps |
 | Frontend | React 18 + Vite | Fast dev server, easy PWA support |
 | Styling | TailwindCSS | Utility-first, mobile-first |
@@ -79,6 +79,8 @@ The project is designed to degrade gracefully. Image and video generation are op
 - Primary: `llama3.1:8b` (Q4_K_M quantization)
 - Alternative: `mistral:7b` (slightly faster, slightly less quality)
 - Quality upgrade: `llama3.1:8b-q8` (requires ~9GB, may cause OOM — use Q4 instead)
+
+OR potentially the new gemma4 models. Do some research before deciding.
 
 ---
 
@@ -194,7 +196,7 @@ PORT=3001
 NODE_ENV=development
 
 # Database
-DB_PATH=../data/synthfeed.db
+DB_PATH=../data/SocialForge.db
 
 # Security
 INTERNAL_API_KEY=change-this-to-something-secret
@@ -227,7 +229,7 @@ INTERNAL_API_KEY  = os.getenv("INTERNAL_KEY",   "change-this-to-something-secret
 
 ## Glossary
 
-| Term | Meaning in SynthFeed |
+| Term | Meaning in SocialForge |
 |------|---------------------|
 | Community | Equivalent to a subreddit — a topic-based group |
 | Post | A text, link, image, or video submission |
