@@ -123,38 +123,37 @@ The goal is to make the platform feel alive: posts that are doing well climb the
 
 ### Hot Score Algorithm
 
-Replace the basic hot score from Phase 1 with a Reddit-inspired Wilson score variant:
+Phase 2 enhances the Phase 1 hot sort by tuning the decay constant based on observed content volume. The formula remains the same time-decay approach committed to in Phase 1:
 
-```javascript
-function hotScore(post) {
-  const score = post.score;
-  const order = Math.log10(Math.max(Math.abs(score), 1));
-  const sign = score > 0 ? 1 : (score < 0 ? -1 : 0);
-  const ageHours = (Date.now()/1000 - post.scheduled_at) / 3600;
-  return sign * order - ageHours / 12;
+```typescript
+function hotScore(scheduledAt: number, score: number): number {
+  const ageHours = (Date.now() / 1000 - scheduledAt) / 3600;
+  return score / Math.pow(ageHours + 2, 1.5);
 }
 ```
 
-This is computed at query time in JavaScript (not stored), applied after fetching the top N posts, then sorted. For performance, fetch the top 500 posts by `scheduled_at DESC` in the last 48 hours, compute hot scores, return top 25.
+The decay exponent (`1.5`) can be made configurable via the new `hot_score_decay_hours` setting in Phase 2. This is computed at query time in TypeScript (not stored), applied after fetching the top N posts, then sorted. For performance, fetch the top 500 posts by `scheduled_at DESC` in the last 48 hours, compute hot scores, return top 25.
 
 ### Score Update Job
 
-A new server-side background job runs every 15 minutes (using `setInterval` in `index.js` or a lightweight job runner). It simulates ongoing voting activity on posts and comments that were recently published.
+A new server-side background job runs every 15 minutes (using `setInterval` in `index.ts` or a lightweight job runner). It simulates ongoing voting activity on posts and comments that were recently published.
 
-**Job: `jobs/scoreUpdater.js`**
+**Job: `jobs/scoreUpdater.ts`**
 
-```javascript
+```typescript
 // Every 15 minutes:
 // 1. Fetch posts published in the last 6 hours
 // 2. For each post, simulate N new votes based on post's current score and age
 // 3. Apply votes: mostly upvotes (70%), some downvotes (30%), weighted by score
-// 4. Update posts.score, upvote_count, downvote_count in DB
+// 4. Update posts atomically: score = upvote_count - downvote_count in a single statement
 // 5. Same for comments published in the last 3 hours
 ```
 
+**Score invariant:** All score updates must atomically update `score`, `upvote_count`, and `downvote_count` together in a single SQL statement to ensure `score = upvote_count - downvote_count` is always true. Never update `score` alone.
+
 The number of new votes per cycle should decrease as the post ages (exponential decay):
-```javascript
-function newVotesForAge(currentScore, ageHours) {
+```typescript
+function newVotesForAge(currentScore: number, ageHours: number): number {
   const baseActivity = Math.sqrt(currentScore + 1) * 3;
   const decay = Math.exp(-ageHours / 4);
   return Math.floor(baseActivity * decay * (0.5 + Math.random()));
@@ -233,8 +232,8 @@ Insert these rows on first migration:
 | GET | `/api/settings` | Returns all settings as `{ key: value }` flat object |
 | GET | `/api/settings/:key` | Single setting value |
 | PUT | `/api/settings/:key` | Update a setting. Body: `{ value }`. Validates type. |
-| PUT | `/api/settings/bulk` | Update multiple settings. Body: `{ settings: { key: value, ... } }` |
-| GET | `/api/settings/schema` | Returns full schema (all rows including label, description, type, category) for building the UI |
+| PUT | `/api/settings` | Bulk update settings. Body: `{ settings: { key: value, ... } }` |
+| GET | `/api/settings/schema` | Returns full schema (all rows including label, description, type, category) for building the UI. Note: register this route *before* `/api/settings/:key` to avoid the `:key` parameter capturing "schema". |
 
 ### Settings Page UI
 

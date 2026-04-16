@@ -23,8 +23,8 @@ The goal is to simulate the experience of scrolling through Reddit, TikTok, and 
 │                              │                                   │
 │  ┌──────────────────────────────────────────────┐               │
 │  │          Python Generation Scripts           │               │
-│  │  generate_users.py   generate_posts.py       │               │
-│  │  generate_comments.py  generate_daily.py     │               │
+│  │  generate_users.py   generate_posts.py [P1] │               │
+│  │  generate_comments.py  generate_daily.py[P2]│               │
 │  └──────────────────────────────────────────────┘               │
 │                              │                                   │
 │  ┌─────────────┐  ┌──────────────────────────┐                  │
@@ -53,11 +53,12 @@ All components run locally. The React app and the API can be accessed from any d
 
 | Layer | Technology | Why |
 |-------|-----------|-----|
-| Backend | Node.js 24 + Express | Lightweight, fast, easy SQLite integration |
-| Database | SQLite via better-sqlite3 | Zero-config, single file, perfect for personal apps |
-| Frontend | React 18 + Vite | Fast dev server, easy PWA support |
-| Styling | TailwindCSS | Utility-first, mobile-first |
-| State | Zustand + React Query | Simple global state + powerful data fetching |
+| Backend | Node.js 24 + Express 5 + TypeScript | Lightweight, fast, async error handling built-in |
+| Database | SQLite via better-sqlite3 v11 | Zero-config, single file, perfect for personal apps |
+| Frontend | React 19 + Vite 6 + TypeScript | Fast dev server, easy PWA support, latest concurrent features |
+| Routing | React Router v7 (library mode) | Stable, same mental model as v6 |
+| Styling | TailwindCSS v4 | CSS-first config, `@theme` for design tokens |
+| State | Zustand v5 + TanStack Query v5 | Simple global state + powerful data fetching |
 | PWA | vite-plugin-pwa + Workbox | Service worker, offline, installable |
 | LLM | Ollama (llama3.1:8b) | Local, private, free |
 | Image gen | ComfyUI (Phase 4) | Local Stable Diffusion |
@@ -202,7 +203,8 @@ DB_PATH=../data/SocialForge.db
 INTERNAL_API_KEY=change-this-to-something-secret
 SESSION_SECRET=change-this-too
 
-# CORS (set to your LAN IP for mobile access)
+# CORS — comma-separated list of allowed origins (add LAN IP for mobile access)
+# e.g., CORS_ORIGIN=http://localhost:5173,http://192.168.1.50:5173
 CORS_ORIGIN=http://localhost:5173
 ```
 
@@ -222,7 +224,9 @@ import os
 OLLAMA_BASE_URL   = os.getenv("OLLAMA_URL",     "http://localhost:11434")
 OLLAMA_MODEL      = os.getenv("OLLAMA_MODEL",   "llama3.1:8b")
 APP_API_URL       = os.getenv("APP_API_URL",    "http://localhost:3001/api")
-INTERNAL_API_KEY  = os.getenv("INTERNAL_KEY",   "change-this-to-something-secret")
+INTERNAL_API_KEY  = os.getenv("INTERNAL_API_KEY", "change-this-to-something-secret")
+
+INTERNAL_HEADERS = {"X-Internal-Key": INTERNAL_API_KEY}
 ```
 
 ---
