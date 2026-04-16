@@ -7,7 +7,7 @@ OLLAMA_BASE_URL  = os.getenv("OLLAMA_URL",        "http://172.30.160.1:11434")# 
 
 # normal ollama url
 # OLLAMA_BASE_URL  = os.getenv("OLLAMA_URL",        "http://localhost:11434")
-OLLAMA_MODEL     = os.getenv("OLLAMA_MODEL",      "gemma4:e2b")
+OLLAMA_MODEL     = os.getenv("OLLAMA_MODEL",      "qwen2.5:3b")#"gemma4:e2b")
 APP_API_URL      = os.getenv("APP_API_URL",       "http://localhost:3001/api")
 INTERNAL_API_KEY = os.getenv("INTERNAL_API_KEY",  "dev-internal-key")
 
