@@ -10,6 +10,8 @@ A self-hosted, AI-generated social media simulator. Generates and displays a con
 - Community images (generate locally)
 - User images (create locally? or store a few)
 - favicon
+- place in app to view users
+- place to view all communities
 
 ## Prerequisites
 

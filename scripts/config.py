@@ -2,7 +2,7 @@ import os
 import json
 import requests
 
-# windows loopback (get ip with: ` ip route show | grep -i default | awk '{print $3}' `)
+# windows loopback (get ip with: `ip route show | grep -i default | awk '{print $3}'`)
 OLLAMA_BASE_URL  = os.getenv("OLLAMA_URL",        "http://172.30.160.1:11434")# "http://localhost:11434")
 
 # normal ollama url

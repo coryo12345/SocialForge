@@ -3,10 +3,14 @@
 import argparse
 import secrets
 import json
+import random
+import string
 import requests as req
 from config import APP_API_URL, INTERNAL_HEADERS, ollama_generate, extract_json
+from random_seed import random_user_seeds
 
-PROMPT_TEMPLATE = """Generate a realistic internet user persona as a JSON object with these exact fields:
+def seeded_prompt_template(user_seed_words):
+    return f"""Generate a realistic internet user persona as a JSON object with these exact fields:
 - username (string, lowercase, letters/numbers/underscores only, 4-20 chars, unique-ish)
 - display_name (string, 2-30 chars, can have spaces/capitals)
 - bio (string, 1-2 sentences about themselves)
@@ -17,6 +21,11 @@ PROMPT_TEMPLATE = """Generate a realistic internet user persona as a JSON object
 - communication_style (string, 1 sentence describing how they write online)
 - interests (array of 4-8 topic strings)
 - political_lean (one of exactly: "far-left", "center-left", "centrist", "center-right", "far-right", "libertarian", "apolitical")
+
+The username must begin with an actual english word starting with the letter '{random.choice(string.ascii_letters)}'
+The display_name must be an actual human name starting with the letter '{random.choice(string.ascii_letters)}'
+
+The person authentically embodies: {', '.join(user_seed_words)}
 
 Respond ONLY with the JSON object, no other text."""
 
@@ -33,7 +42,9 @@ VALID_POLITICAL = {
 
 def generate_user() -> dict | None:
     for attempt in range(3):
-        raw = ollama_generate(PROMPT_TEMPLATE)
+        seeds = random_user_seeds()
+        print("Generating with seeds: " + ', '.join(seeds))
+        raw = ollama_generate(seeded_prompt_template(seeds))
         data = extract_json(raw)
 
         if not data:

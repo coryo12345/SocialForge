@@ -48,8 +48,8 @@ COMMUNITY_SEEDS = [
     # Storytelling & Drama
     {"name": "aita",               "topic": "Am I The Asshole — share a moral dilemma or interpersonal conflict and let the community render a verdict: YTA, NTA, ESH, or NAH"},
     {"name": "tifu",               "topic": "Today I F***ed Up — confessions of embarrassing, costly, or spectacularly disastrous mistakes and the chaos or consequences that followed"},
-    {"name": "pettyrevenge",       "topic": "small, creative, and deeply satisfying acts of revenge against people who were rude, inconsiderate, or mildly deserving of comeuppance"},
-    {"name": "nuclearrevenge",     "topic": "extreme, scorched-earth revenge stories where someone went way further than necessary — and it was absolutely worth it"},
+    {"name": "pettyrevenge",       "topic": "Personal stories of small, creative, and deeply satisfying acts of revenge against people who were rude, inconsiderate, or mildly deserving of comeuppance"},
+    {"name": "nuclearrevenge",     "topic": "Personal stories of extreme, scorched-earth revenge that you took where someone went way further than necessary — and it was absolutely worth it"},
     {"name": "maliciouscompliance","topic": "following instructions or rules to the exact letter in a way that technically satisfies the request while spectacularly defeating its purpose"},
     {"name": "amioverreacting",    "topic": "sharing an emotional reaction to a situation and asking whether your response was proportionate — sometimes the answer is yes, sometimes no"},
     {"name": "bridezillas",        "topic": "wedding horror stories — out-of-control brides, grooms, and wedding parties who turned a celebration into a nightmare of entitlement and drama"},
