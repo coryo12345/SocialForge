@@ -38,6 +38,22 @@ router.get('/', (req, res) => {
   res.json(communities);
 });
 
+router.get('/trending', (_req, res) => {
+  const rows = db
+    .prepare(
+      `SELECT c.*, COUNT(p.id) as recent_posts, COALESCE(SUM(p.score), 0) as total_score
+       FROM posts p
+       JOIN communities c ON p.community_id = c.id
+       WHERE p.scheduled_at > (strftime('%s','now') - 86400)
+         AND p.scheduled_at <= strftime('%s','now')
+       GROUP BY p.community_id
+       ORDER BY recent_posts DESC, total_score DESC
+       LIMIT 5`,
+    )
+    .all();
+  res.json(rows);
+});
+
 router.get('/:name', (req, res) => {
   const community = db
     .prepare('SELECT * FROM communities WHERE name = ?')

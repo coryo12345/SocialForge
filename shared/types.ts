@@ -28,6 +28,8 @@ export interface PublicUser {
   bio: string | null;
   is_real_user: 0 | 1;
   karma: number;
+  post_count: number;
+  comment_count: number;
   created_at: number;
 }
 
@@ -127,5 +129,20 @@ export interface ApiError {
   message?: string;
 }
 
+export interface Setting {
+  key: string;
+  value: string;
+  label: string;
+  description: string | null;
+  category: string;
+  type: 'number' | 'boolean' | 'string' | 'select';
+}
+
+export interface TrendingCommunity extends Community {
+  recent_posts: number;
+  total_score: number;
+}
+
 export type SortOption = 'hot' | 'new' | 'top';
+export type CommentSortOption = 'best' | 'new' | 'old' | 'controversial';
 export type VoteValue = -1 | 0 | 1;

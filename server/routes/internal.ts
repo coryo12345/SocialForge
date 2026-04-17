@@ -115,6 +115,10 @@ router.post('/posts/bulk', (req, res) => {
         @scheduled_at, @created_at, @updated_at)`,
   );
 
+  const updateUserPostCount = db.prepare(
+    'UPDATE users SET post_count = post_count + 1 WHERE id = ?',
+  );
+
   const bulkInsert = db.transaction(
     (
       rows: typeof posts,
@@ -144,6 +148,7 @@ router.post('/posts/bulk', (req, res) => {
           created_at: row.created_at,
           updated_at: row.updated_at,
         });
+        updateUserPostCount.run(user.id);
         count++;
       }
       return count;
@@ -186,12 +191,16 @@ router.post('/comments/bulk', (req, res) => {
        (@post_id, @parent_id, @user_id, @body, @score, @upvote_count, @downvote_count,
         @depth, @scheduled_at, @created_at, @updated_at)`,
   );
-  const updateCount = db.prepare(
+  const updatePostCount = db.prepare(
     'UPDATE posts SET comment_count = comment_count + ? WHERE id = ?',
+  );
+  const updateUserCount = db.prepare(
+    'UPDATE users SET comment_count = comment_count + ? WHERE id = ?',
   );
 
   const bulkInsert = db.transaction((rows: typeof comments) => {
     const countByPost = new Map<number, number>();
+    const countByUser = new Map<number, number>();
     let count = 0;
     for (const row of rows) {
       const user = getUser.get(row.username) as { id: number } | undefined;
@@ -212,11 +221,11 @@ router.post('/comments/bulk', (req, res) => {
         updated_at: row.updated_at,
       });
       countByPost.set(row.post_id, (countByPost.get(row.post_id) ?? 0) + 1);
+      countByUser.set(user.id, (countByUser.get(user.id) ?? 0) + 1);
       count++;
     }
-    for (const [postId, c] of countByPost) {
-      updateCount.run(c, postId);
-    }
+    for (const [postId, c] of countByPost) updatePostCount.run(c, postId);
+    for (const [userId, c] of countByUser) updateUserCount.run(c, userId);
     return count;
   });
 

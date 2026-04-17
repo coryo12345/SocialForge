@@ -5,7 +5,7 @@ import type { FeedPost, CommentWithAuthor, PaginatedResponse } from '../../share
 const router = Router();
 
 const PUBLIC_USER_FIELDS = `
-  id, username, display_name, avatar_seed, bio, is_real_user, karma, created_at
+  id, username, display_name, avatar_seed, bio, is_real_user, karma, post_count, comment_count, created_at
 `;
 
 router.get('/:username', (req, res) => {
@@ -88,31 +88,26 @@ router.get('/:username/comments', (req, res) => {
     return;
   }
 
+  const BASE_COMMENT_QUERY = `
+    SELECT c.*,
+      u.username AS author_username, u.display_name AS author_display_name,
+      u.avatar_seed AS author_avatar_seed,
+      comm.name AS community_name
+    FROM comments c
+    JOIN users u ON c.user_id = u.id
+    JOIN posts p ON c.post_id = p.id
+    JOIN communities comm ON p.community_id = comm.id
+    WHERE c.user_id = ? AND c.is_removed = 0 AND c.scheduled_at <= ?
+  `;
+
   let items: CommentWithAuthor[];
   if (cursor) {
     items = db
-      .prepare(
-        `SELECT c.*,
-           u.username AS author_username, u.display_name AS author_display_name,
-           u.avatar_seed AS author_avatar_seed
-         FROM comments c
-         JOIN users u ON c.user_id = u.id
-         WHERE c.user_id = ? AND c.is_removed = 0 AND c.scheduled_at <= ?
-           AND c.scheduled_at < ?
-         ORDER BY c.scheduled_at DESC LIMIT ?`,
-      )
+      .prepare(`${BASE_COMMENT_QUERY} AND c.scheduled_at < ? ORDER BY c.scheduled_at DESC LIMIT ?`)
       .all(user.id, now, parseInt(cursor), limitRaw + 1) as CommentWithAuthor[];
   } else {
     items = db
-      .prepare(
-        `SELECT c.*,
-           u.username AS author_username, u.display_name AS author_display_name,
-           u.avatar_seed AS author_avatar_seed
-         FROM comments c
-         JOIN users u ON c.user_id = u.id
-         WHERE c.user_id = ? AND c.is_removed = 0 AND c.scheduled_at <= ?
-         ORDER BY c.scheduled_at DESC LIMIT ?`,
-      )
+      .prepare(`${BASE_COMMENT_QUERY} ORDER BY c.scheduled_at DESC LIMIT ?`)
       .all(user.id, now, limitRaw + 1) as CommentWithAuthor[];
   }
 

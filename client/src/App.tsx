@@ -7,6 +7,7 @@ import Community from './pages/Community';
 import PostPage from './pages/PostPage';
 import UserProfile from './pages/UserProfile';
 import Login from './pages/Login';
+import Settings from './pages/Settings';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -23,6 +24,7 @@ const router = createBrowserRouter([
   { path: '/r/:community/:postId', element: <PostPage /> },
   { path: '/u/:username', element: <UserProfile /> },
   { path: '/login', element: <Login /> },
+  { path: '/settings', element: <Settings /> },
 ]);
 
 function ThemeApplier() {

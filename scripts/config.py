@@ -17,13 +17,32 @@ INTERNAL_HEADERS = {
 }
 
 
-def ollama_generate(prompt: str, max_retries: int = 3) -> str | None:
+def load_settings() -> dict:
+    """Fetch all settings from the API as a flat {key: value} dict. Falls back to {} on error."""
+    try:
+        resp = requests.get(
+            f"{APP_API_URL}/settings",
+            headers={"Content-Type": "application/json"},
+            timeout=10,
+        )
+        if resp.ok:
+            return resp.json()
+    except Exception as e:
+        print(f"  Warning: could not load settings: {e}")
+    return {}
+
+
+def ollama_generate(prompt: str, max_retries: int = 3, model: str | None = None, temperature: float | None = None) -> str | None:
     """Call Ollama generate endpoint. Returns the response text or None on failure."""
+    _model = model or OLLAMA_MODEL
+    _opts = {}
+    if temperature is not None:
+        _opts["temperature"] = temperature
     for attempt in range(max_retries):
         try:
             resp = requests.post(
                 f"{OLLAMA_BASE_URL}/api/generate",
-                json={"model": OLLAMA_MODEL, "prompt": prompt, "stream": False},
+                json={"model": _model, "prompt": prompt, "stream": False, "options": _opts} if _opts else {"model": _model, "prompt": prompt, "stream": False},
                 timeout=120,
             )
             resp.raise_for_status()

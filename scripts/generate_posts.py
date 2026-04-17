@@ -6,7 +6,7 @@ import time
 import json
 import datetime
 import requests as req
-from config import APP_API_URL, INTERNAL_HEADERS, ollama_generate, extract_json
+from config import APP_API_URL, INTERNAL_HEADERS, ollama_generate, extract_json, load_settings
 from random_seed import (
     POST_FORMATS, EMOTIONAL_REGISTERS, POST_ANGLES,
     NARRATIVE_POST_FORMATS, NARRATIVE_EMOTIONAL_REGISTERS, NARRATIVE_POST_ANGLES,
@@ -30,11 +30,11 @@ Respond with ONLY a JSON object with these exact fields:
 No other text. Just the JSON object."""
 
 
-def random_score() -> tuple[int, int, int]:
+def random_score(viral_prob: float = 0.05) -> tuple[int, int, int]:
     """Returns (score, upvote_count, downvote_count) using Pareto distribution."""
     base = random.paretovariate(1.5)
     score = int(base * 3)
-    if random.random() < 0.05:
+    if random.random() < viral_prob:
         score = random.randint(500, 5000)
     score = min(score, 10000)
     # Realistic up/down counts
@@ -123,16 +123,26 @@ def fetch_random_user() -> dict | None:
 def main():
     parser = argparse.ArgumentParser(description="Generate AI posts for a given date")
     parser.add_argument("--date", default="today", help="Date in YYYY-MM-DD format or 'today'")
-    parser.add_argument("--count", type=int, default=50, help="Number of posts to generate")
+    parser.add_argument("--count", type=int, default=None, help="Number of posts to generate")
     parser.add_argument("--community", default=None, help="Only generate for this community slug")
     args = parser.parse_args()
+
+    settings = load_settings()
+    ollama_model = settings.get("ollama_model") or None
+    ollama_temp = float(settings.get("ollama_temperature", 0.8))
+    viral_prob = float(settings.get("viral_post_probability", 0.05))
+    title_only_ratio = float(settings.get("title_only_post_ratio", 0.3))
+
+    count_min = int(settings.get("posts_per_day_min", 50))
+    count_max = int(settings.get("posts_per_day_max", 150))
+    post_count = args.count if args.count is not None else random.randint(count_min, count_max)
 
     target_date = (
         datetime.date.today()
         if args.date == "today"
         else datetime.date.fromisoformat(args.date)
     )
-    print(f"Generating {args.count} posts for {target_date}")
+    print(f"Generating {post_count} posts for {target_date}")
 
     # Fetch communities
     params = {}
@@ -150,7 +160,7 @@ def main():
         print("No communities found. Run generate_communities.py first.")
         return
 
-    distribution = weighted_distribution(communities, args.count)
+    distribution = weighted_distribution(communities, post_count)
     batch = []
     total_inserted = 0
     now = int(time.time())
@@ -206,7 +216,7 @@ def main():
                 max_paragraph=random.randint(min_paragraphs, 2*min_paragraphs+1),
             )
 
-            raw = ollama_generate(prompt)
+            raw = ollama_generate(prompt, model=ollama_model, temperature=ollama_temp)
             data = extract_json(raw)
 
             if not data or "title" not in data:
@@ -214,7 +224,7 @@ def main():
                 failed += 1
                 continue
 
-            score, upvotes, downvotes = random_score()
+            score, upvotes, downvotes = random_score(viral_prob)
             batch.append({
                 "community_name": community["name"],
                 "username": user["username"],

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import Navbar from '../components/Navbar';
@@ -5,10 +6,11 @@ import Sidebar from '../components/Sidebar';
 import PostDetail from '../components/PostDetail';
 import CommentThread from '../components/CommentThread';
 import apiClient from '../api/client';
-import type { FeedPost, CommentWithAuthor } from 'shared/types';
+import type { FeedPost, CommentWithAuthor, CommentSortOption } from 'shared/types';
 
 export default function PostPage() {
   const { community: communityName, postId } = useParams<{ community: string; postId: string }>();
+  const [commentSort, setCommentSort] = useState<CommentSortOption>('best');
 
   const { data: post, isPending: postLoading, isError: postError } = useQuery<FeedPost>({
     queryKey: ['post', Number(postId)],
@@ -17,8 +19,9 @@ export default function PostPage() {
   });
 
   const { data: comments = [], isPending: commentsLoading } = useQuery<CommentWithAuthor[]>({
-    queryKey: ['comments', Number(postId)],
-    queryFn: () => apiClient.get(`/posts/${postId}/comments`).then((r) => r.data),
+    queryKey: ['comments', Number(postId), commentSort],
+    queryFn: () =>
+      apiClient.get(`/posts/${postId}/comments`, { params: { sort: commentSort } }).then((r) => r.data),
     enabled: !!postId,
     staleTime: 30_000,
   });
@@ -77,7 +80,12 @@ export default function PostPage() {
             )}
 
             {!commentsLoading && post && (
-              <CommentThread comments={comments} postId={post.id} />
+              <CommentThread
+                comments={comments}
+                postId={post.id}
+                sort={commentSort}
+                onSortChange={setCommentSort}
+              />
             )}
           </div>
         </main>
@@ -95,6 +103,8 @@ export default function PostPage() {
               rules: null,
               tags: null,
               member_count: 0,
+              post_style_prompt: null,
+              is_narrative: 0,
               created_at: 0,
             }}
           />

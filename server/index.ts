@@ -13,6 +13,8 @@ import postsRouter from './routes/posts.js';
 import commentsRouter from './routes/comments.js';
 import usersRouter from './routes/users.js';
 import internalRouter from './routes/internal.js';
+import settingsRouter from './routes/settings.js';
+import { startScoreUpdater } from './jobs/scoreUpdater.js';
 
 // Initialize DB (runs migrations on import — must be imported after config)
 import './db.js';
@@ -70,6 +72,7 @@ app.use('/api/communities', communitiesRouter);
 app.use('/api/posts', postsRouter);
 app.use('/api', commentsRouter);   // comments router uses /posts/:id/comments paths
 app.use('/api/users', usersRouter);
+app.use('/api/settings', settingsRouter);
 
 // Production: serve client static files
 if (config.NODE_ENV === 'production') {
@@ -88,4 +91,5 @@ app.use((err: Error & { status?: number }, _req: Request, res: Response, _next: 
 
 app.listen(parseInt(config.PORT), '0.0.0.0', () => {
   console.log(`SocialForge server listening on http://0.0.0.0:${config.PORT}`);
+  startScoreUpdater();
 });
