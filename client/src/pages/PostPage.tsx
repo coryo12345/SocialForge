@@ -6,7 +6,7 @@ import Sidebar from '../components/Sidebar';
 import PostDetail from '../components/PostDetail';
 import CommentThread from '../components/CommentThread';
 import apiClient from '../api/client';
-import type { FeedPost, CommentWithAuthor, CommentSortOption } from 'shared/types';
+import type { FeedPost, CommentWithAuthor, CommentSortOption, Community } from 'shared/types';
 
 export default function PostPage() {
   const { community: communityName, postId } = useParams<{ community: string; postId: string }>();
@@ -16,6 +16,13 @@ export default function PostPage() {
     queryKey: ['post', Number(postId)],
     queryFn: () => apiClient.get(`/posts/${postId}`).then((r) => r.data),
     enabled: !!postId,
+  });
+
+  const { data: community } = useQuery<Community>({
+    queryKey: ['community', communityName],
+    queryFn: () => apiClient.get(`/communities/${communityName}`).then((r) => r.data),
+    enabled: !!communityName,
+    staleTime: 60_000,
   });
 
   const { data: comments = [], isPending: commentsLoading } = useQuery<CommentWithAuthor[]>({
@@ -90,25 +97,7 @@ export default function PostPage() {
           </div>
         </main>
 
-        {post && (
-          <Sidebar
-            community={{
-              id: post.community_id,
-              name: post.community_name,
-              display_name: post.community_display_name,
-              banner_color: post.community_banner_color,
-              icon_seed: '',
-              description: null,
-              sidebar_text: null,
-              rules: null,
-              tags: null,
-              member_count: 0,
-              post_style_prompt: null,
-              is_narrative: 0,
-              created_at: 0,
-            }}
-          />
-        )}
+        {community && <Sidebar community={community} />}
       </div>
     </div>
   );

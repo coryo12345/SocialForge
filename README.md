@@ -5,15 +5,16 @@ A self-hosted, AI-generated social media simulator. Generates and displays a con
 ---
 
 ## TODOs
-- member count for community shows as 0 when viewing post
 - nuclearrevenge/pettyrevenge descriptions is NOT prompting for the right content lol
-- Community images (generate locally)
-- User images (create locally? or store a few)
-- favicon
 - place in app to view users
 - place to view all communities
 - migrations system
 - need to beef up the post generation system to have more voice and purpose. do ideation -> plot generation -> writing as separate steps
+- favicon
+
+### Image generation things...
+- Community images (generate locally)
+- User images (create locally? or store a few)
 
 ## Prerequisites
 
