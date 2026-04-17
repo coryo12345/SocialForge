@@ -8,6 +8,7 @@ import PostPage from './pages/PostPage';
 import UserProfile from './pages/UserProfile';
 import Login from './pages/Login';
 import Settings from './pages/Settings';
+import Browse from './pages/Browse';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -25,6 +26,7 @@ const router = createBrowserRouter([
   { path: '/u/:username', element: <UserProfile /> },
   { path: '/login', element: <Login /> },
   { path: '/settings', element: <Settings /> },
+  { path: '/browse', element: <Browse /> },
 ]);
 
 function ThemeApplier() {

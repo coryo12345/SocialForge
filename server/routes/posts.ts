@@ -4,25 +4,28 @@ import type { FeedPost, VoteValue } from '../../shared/types.js';
 
 const router = Router();
 
-const POST_DETAIL_QUERY = `
-  SELECT
-    p.*,
-    c.name         AS community_name,
-    c.display_name AS community_display_name,
-    c.banner_color AS community_banner_color,
-    u.username     AS author_username,
-    u.display_name AS author_display_name,
-    u.avatar_seed  AS author_avatar_seed
-  FROM posts p
-  JOIN communities c ON p.community_id = c.id
-  JOIN users u       ON p.user_id = u.id
-  WHERE p.id = ? AND p.is_removed = 0 AND p.scheduled_at <= ?
-`;
+function postDetailQuery(now: number) {
+  return `
+    SELECT
+      p.*,
+      (SELECT COUNT(*) FROM comments WHERE post_id = p.id AND scheduled_at <= ${now} AND is_removed = 0) AS comment_count,
+      c.name         AS community_name,
+      c.display_name AS community_display_name,
+      c.banner_color AS community_banner_color,
+      u.username     AS author_username,
+      u.display_name AS author_display_name,
+      u.avatar_seed  AS author_avatar_seed
+    FROM posts p
+    JOIN communities c ON p.community_id = c.id
+    JOIN users u       ON p.user_id = u.id
+    WHERE p.id = ? AND p.is_removed = 0 AND p.scheduled_at <= ?
+  `;
+}
 
 router.get('/:id', (req, res) => {
   const now = Math.floor(Date.now() / 1000);
   const post = db
-    .prepare(POST_DETAIL_QUERY)
+    .prepare(postDetailQuery(now))
     .get(parseInt(req.params.id), now) as FeedPost | undefined;
 
   if (!post) {

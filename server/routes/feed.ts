@@ -4,20 +4,23 @@ import type { FeedPost, PaginatedResponse } from '../../shared/types.js';
 
 const router = Router();
 
-const FEED_QUERY = `
-  SELECT
-    p.*,
-    c.name         AS community_name,
-    c.display_name AS community_display_name,
-    c.banner_color AS community_banner_color,
-    u.username     AS author_username,
-    u.display_name AS author_display_name,
-    u.avatar_seed  AS author_avatar_seed
-  FROM posts p
-  JOIN communities c ON p.community_id = c.id
-  JOIN users u       ON p.user_id = u.id
-  WHERE p.is_removed = 0
-`;
+function feedQuery(now: number) {
+  return `
+    SELECT
+      p.*,
+      (SELECT COUNT(*) FROM comments WHERE post_id = p.id AND scheduled_at <= ${now} AND is_removed = 0) AS comment_count,
+      c.name         AS community_name,
+      c.display_name AS community_display_name,
+      c.banner_color AS community_banner_color,
+      u.username     AS author_username,
+      u.display_name AS author_display_name,
+      u.avatar_seed  AS author_avatar_seed
+    FROM posts p
+    JOIN communities c ON p.community_id = c.id
+    JOIN users u       ON p.user_id = u.id
+    WHERE p.is_removed = 0
+  `;
+}
 
 function hotScore(scheduledAt: number, score: number): number {
   const ageHours = (Date.now() / 1000 - scheduledAt) / 3600;
@@ -35,13 +38,13 @@ router.get('/', (req, res) => {
     if (cursor) {
       items = db
         .prepare(
-          `${FEED_QUERY} AND p.scheduled_at <= ? AND p.scheduled_at < ?
+          `${feedQuery(now)} AND p.scheduled_at <= ? AND p.scheduled_at < ?
            ORDER BY p.scheduled_at DESC LIMIT ?`,
         )
         .all(now, parseInt(cursor), limitRaw + 1) as FeedPost[];
     } else {
       items = db
-        .prepare(`${FEED_QUERY} AND p.scheduled_at <= ? ORDER BY p.scheduled_at DESC LIMIT ?`)
+        .prepare(`${feedQuery(now)} AND p.scheduled_at <= ? ORDER BY p.scheduled_at DESC LIMIT ?`)
         .all(now, limitRaw + 1) as FeedPost[];
     }
 
@@ -62,7 +65,7 @@ router.get('/', (req, res) => {
       };
       items = db
         .prepare(
-          `${FEED_QUERY} AND p.scheduled_at <= ?
+          `${feedQuery(now)} AND p.scheduled_at <= ?
            AND (p.score < ? OR (p.score = ? AND p.id < ?))
            ORDER BY p.score DESC, p.id DESC LIMIT ?`,
         )
@@ -70,7 +73,7 @@ router.get('/', (req, res) => {
     } else {
       items = db
         .prepare(
-          `${FEED_QUERY} AND p.scheduled_at <= ? ORDER BY p.score DESC, p.id DESC LIMIT ?`,
+          `${feedQuery(now)} AND p.scheduled_at <= ? ORDER BY p.score DESC, p.id DESC LIMIT ?`,
         )
         .all(now, limitRaw + 1) as FeedPost[];
     }
@@ -93,7 +96,7 @@ router.get('/', (req, res) => {
   const cutoff = now - 48 * 60 * 60;
   const pool = db
     .prepare(
-      `${FEED_QUERY} AND p.scheduled_at <= ? AND p.scheduled_at >= ?
+      `${feedQuery(now)} AND p.scheduled_at <= ? AND p.scheduled_at >= ?
        ORDER BY p.scheduled_at DESC LIMIT 500`,
     )
     .all(now, cutoff) as FeedPost[];

@@ -109,7 +109,7 @@ export default function Settings() {
         </div>
       )}
 
-      <div className="max-w-4xl mx-auto px-4 pt-16 pb-20 md:pb-8 flex gap-6">
+      <div className="max-w-4xl mx-auto px-4 pt-16 pb-20 md:pb-8 flex flex-col gap-4 md:flex-row md:gap-6">
         {/* Category sidebar */}
         <aside className="hidden md:block w-52 shrink-0">
           <div className="bg-bg-secondary border border-border rounded-lg overflow-hidden sticky top-20">

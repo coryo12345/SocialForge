@@ -105,11 +105,11 @@ export default function Navbar() {
           <span className="text-xs">Home</span>
         </Link>
         <Link
-          to="/communities"
+          to="/browse"
           className="flex flex-col items-center gap-0.5 text-text-secondary hover:text-accent transition-colors"
         >
           <GridIcon />
-          <span className="text-xs">Communities</span>
+          <span className="text-xs">Browse</span>
         </Link>
         {user?.is_real_user === 1 && (
           <Link

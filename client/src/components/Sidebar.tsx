@@ -94,6 +94,12 @@ function HomeSidebar() {
             No communities yet.
           </p>
         )}
+        <Link
+          to="/browse"
+          className="block px-4 py-2.5 text-xs text-text-secondary hover:text-accent hover:bg-bg-tertiary transition-colors text-center border-t border-border"
+        >
+          View all communities &amp; users →
+        </Link>
       </div>
     </div>
   );
