@@ -142,6 +142,7 @@ def generate_comment_tree(
 
     used_user_ids: set[int] = {post.get("user_id", -1)}
     comment_index = 0
+    temp_id_counter = 0
 
     def pick_user(exclude: set) -> dict | None:
         candidates = [u for u in users if u["id"] not in exclude]
@@ -149,8 +150,8 @@ def generate_comment_tree(
             candidates = users
         return random.choice(candidates) if candidates else None
 
-    def make_comment(user: dict, body: str, parent_id: int | None, depth: int) -> dict:
-        nonlocal comment_index
+    def make_comment(user: dict, body: str, parent_temp_id: int | None, depth: int) -> dict:
+        nonlocal comment_index, temp_id_counter
         score, upvotes, downvotes = random_comment_score()
         # Bonus for early comments
         if comment_index < 3:
@@ -158,9 +159,11 @@ def generate_comment_tree(
             upvotes = max(upvotes, score)
         offset = decay_offset_seconds(post_scheduled, comment_index)
         comment_index += 1
+        temp_id_counter += 1
         return {
             "post_id": post["id"],
-            "parent_id": parent_id,
+            "temp_id": temp_id_counter,
+            "parent_id": parent_temp_id,
             "username": user["username"],
             "body": body,
             "score": score,
@@ -237,19 +240,14 @@ def generate_comment_tree(
             if not body_text or len(body_text.strip()) < 3:
                 continue
 
-            reply = make_comment(reply_user, body_text.strip()[:1000], parent.get("_temp_id"), depth)
+            reply = make_comment(reply_user, body_text.strip()[:1000], parent.get("temp_id"), depth)
             reply["_user"] = reply_user
             comments.append(reply)
             spent += 1
             spent += gen_replies(reply, depth + 1, remaining_budget - spent - 1)
         return spent
 
-    # Assign temp IDs and add top-level comments to result
-    # We use a placeholder since actual DB IDs aren't known until bulk insert
-    # The bulk insert endpoint handles parent lookup by position — we use None for top-level
-    # and track reply nesting via depth field
-    for i, c in enumerate(top_level_comments):
-        c["_temp_id"] = -(i + 1)  # negative = top-level placeholder
+    for c in top_level_comments:
         comments.append(c)
 
     budget = max(0, total - top_level_count)
@@ -259,10 +257,8 @@ def generate_comment_tree(
         spent = gen_replies(c, 1, budget)
         budget -= spent
 
-    # Strip temp fields before returning
     for c in comments:
         c.pop("_user", None)
-        c.pop("_temp_id", None)
 
     return comments
 
@@ -306,7 +302,6 @@ def main():
         return
 
     total_inserted = 0
-    batch: list = []
 
     for i, post in enumerate(posts):
         print(f"\n[{i+1}/{len(posts)}] Post {post['id']}: {post.get('title', '')[:60]}")
@@ -314,12 +309,7 @@ def main():
             post, users, max_top_level, max_depth, max_replies, multiplier, ollama_model, ollama_temp
         )
         print(f"  Generated {len(comments)} comments")
-        batch.extend(comments)
-        if len(batch) >= 10:
-            total_inserted += flush_comments(batch)
-            batch.clear()
-
-    total_inserted += flush_comments(batch)
+        total_inserted += flush_comments(comments)
     print(f"\nDone. Total inserted: {total_inserted}")
 
 

@@ -164,6 +164,7 @@ router.post('/comments/bulk', (req, res) => {
   const { comments } = req.body as {
     comments: Array<{
       post_id: number;
+      temp_id?: number | null;
       parent_id?: number | null;
       username: string;
       body: string;
@@ -201,15 +202,22 @@ router.post('/comments/bulk', (req, res) => {
   const bulkInsert = db.transaction((rows: typeof comments) => {
     const countByPost = new Map<number, number>();
     const countByUser = new Map<number, number>();
+    const tempIdMap = new Map<number, number>(); // temp_id → real db id
     let count = 0;
     for (const row of rows) {
       const user = getUser.get(row.username) as { id: number } | undefined;
       if (!user) continue;
 
+      const rawParentId = row.parent_id ?? null;
+      const resolvedParentId =
+        rawParentId !== null && tempIdMap.has(rawParentId)
+          ? tempIdMap.get(rawParentId)!
+          : null;
+
       const score = row.score ?? 0;
-      insert.run({
+      const result = insert.run({
         post_id: row.post_id,
-        parent_id: row.parent_id ?? null,
+        parent_id: resolvedParentId,
         user_id: user.id,
         body: row.body,
         score,
@@ -220,6 +228,9 @@ router.post('/comments/bulk', (req, res) => {
         created_at: row.created_at,
         updated_at: row.updated_at,
       });
+      if (row.temp_id != null) {
+        tempIdMap.set(row.temp_id, result.lastInsertRowid as number);
+      }
       countByPost.set(row.post_id, (countByPost.get(row.post_id) ?? 0) + 1);
       countByUser.set(user.id, (countByUser.get(user.id) ?? 0) + 1);
       count++;
