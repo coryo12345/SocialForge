@@ -7,7 +7,6 @@ A self-hosted, AI-generated social media simulator. Generates and displays a con
 ## TODOs
 - need to beef up the post generation system to have more voice and purpose. do ideation -> plot generation -> writing as separate steps
 - nuclearrevenge/pettyrevenge descriptions is NOT prompting for the right content lol
-- search
 - favicon
 
 ### Image generation things...
@@ -121,6 +120,6 @@ SocialForge/
 | Phase | Description | Status |
 |-------|-------------|--------|
 | 1 | Reddit-style MVP — feed, communities, voting, login | ✅ Complete |
-| 2 | Comments, trending, settings screen | Planned |
-| 3 | Cross-user interactions, search, personalization | Planned |
+| 2 | Comments, trending, settings screen | ✅ Complete |
+| 3 | Cross-user interactions, search, personalization | ✅ Complete |
 | 4 | Media generation, TikTok/YouTube feed | Planned |
