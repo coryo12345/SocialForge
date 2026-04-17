@@ -4,6 +4,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../api/client';
 import { useSession } from '../store/useSession';
+import MarkdownBody from './MarkdownBody';
 import type { CommentWithAuthor, CommentSortOption, VoteValue } from 'shared/types';
 
 interface CommentNode extends CommentWithAuthor {
@@ -199,9 +200,9 @@ function CommentNodeView({
 
           {!collapsed && (
             <>
-              <p className="text-sm text-text-primary whitespace-pre-wrap leading-relaxed mb-2">
-                {node.body}
-              </p>
+              <div className="text-sm text-text-primary mb-2">
+                <MarkdownBody>{node.body}</MarkdownBody>
+              </div>
 
               <div className="flex items-center gap-3 mb-2">
                 <VoteButtons

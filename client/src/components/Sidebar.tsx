@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '../api/client';
+import MarkdownBody from './MarkdownBody';
 import type { Community, TrendingCommunity } from 'shared/types';
 
 interface SidebarProps {
@@ -132,9 +133,9 @@ function CommunitySidebar({ community }: { community: Community }) {
             members
           </div>
           {community.sidebar_text && (
-            <p className="text-xs text-text-secondary mt-3 leading-relaxed">
-              {community.sidebar_text}
-            </p>
+            <div className="text-xs text-text-secondary mt-3">
+              <MarkdownBody>{community.sidebar_text}</MarkdownBody>
+            </div>
           )}
         </div>
       </div>

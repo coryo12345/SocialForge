@@ -9,6 +9,9 @@ import UserProfile from './pages/UserProfile';
 import Login from './pages/Login';
 import Settings from './pages/Settings';
 import Browse from './pages/Browse';
+import Activity from './pages/Activity';
+import Search from './pages/Search';
+import OfflineBanner from './components/OfflineBanner';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -27,6 +30,8 @@ const router = createBrowserRouter([
   { path: '/login', element: <Login /> },
   { path: '/settings', element: <Settings /> },
   { path: '/browse', element: <Browse /> },
+  { path: '/activity', element: <Activity /> },
+  { path: '/search', element: <Search /> },
 ]);
 
 function ThemeApplier() {
@@ -50,6 +55,7 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeApplier />
+      <OfflineBanner />
       <RouterProvider router={router} />
     </QueryClientProvider>
   );

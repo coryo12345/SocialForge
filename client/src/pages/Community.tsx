@@ -6,6 +6,7 @@ import Sidebar from '../components/Sidebar';
 import CommunityHeader from '../components/CommunityHeader';
 import PostCard from '../components/PostCard';
 import apiClient from '../api/client';
+import { useActivityTracker } from '../hooks/useActivityTracker';
 import type { Community as CommunityType, FeedPost, PaginatedResponse, SortOption } from 'shared/types';
 
 const SORT_OPTIONS: { value: SortOption; label: string }[] = [
@@ -18,12 +19,20 @@ export default function Community() {
   const { community: communityName } = useParams<{ community: string }>();
   const [sort, setSort] = useState<SortOption>('hot');
   const sentinelRef = useRef<HTMLDivElement>(null);
+  const { track } = useActivityTracker();
 
   const { data: community, isError: communityError } = useQuery<CommunityType>({
     queryKey: ['community', communityName],
     queryFn: () => apiClient.get(`/communities/${communityName}`).then((r) => r.data),
     enabled: !!communityName,
   });
+
+  useEffect(() => {
+    if (community?.id) {
+      track('visit_community', community.id, 'community');
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [community?.id]);
 
   const { data, fetchNextPage, hasNextPage, isPending, isFetchingNextPage } = useInfiniteQuery({
     queryKey: ['community-posts', communityName, sort],

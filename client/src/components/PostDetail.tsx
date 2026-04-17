@@ -1,9 +1,12 @@
+import { useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import VoteButton from './VoteButton';
+import MarkdownBody from './MarkdownBody';
 import apiClient from '../api/client';
 import { useSession } from '../store/useSession';
+import { useActivityTracker } from '../hooks/useActivityTracker';
 import type { FeedPost, VoteValue } from 'shared/types';
 
 interface PostDetailProps {
@@ -14,6 +17,17 @@ interface PostDetailProps {
 export default function PostDetail({ post, currentVote = 0 }: PostDetailProps) {
   const { user } = useSession();
   const queryClient = useQueryClient();
+  const { track, trackDwell } = useActivityTracker();
+  const mountTimeRef = useRef(Date.now());
+
+  useEffect(() => {
+    track('view_post', post.id, 'post');
+    const mountTime = mountTimeRef.current;
+    return () => {
+      trackDwell(post.id, 'post', Date.now() - mountTime);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [post.id]);
 
   const voteMutation = useMutation({
     mutationFn: (value: VoteValue) =>
@@ -26,6 +40,7 @@ export default function PostDetail({ post, currentVote = 0 }: PostDetailProps) {
   const handleVote = (value: VoteValue) => {
     if (!user) return;
     voteMutation.mutate(value);
+    track(value === 1 ? 'upvote' : 'downvote', post.id, 'post');
   };
 
   const optimisticScore = voteMutation.variables !== undefined
@@ -76,10 +91,41 @@ export default function PostDetail({ post, currentVote = 0 }: PostDetailProps) {
         )}
       </h1>
 
+      {/* Media */}
+      {post.post_type === 'image' && (
+        <div className="mb-4 rounded overflow-hidden bg-bg-tertiary flex items-center justify-center">
+          {post.media_url ? (
+            <img src={post.media_url} alt={post.title} className="max-w-full max-h-[600px] object-contain" />
+          ) : (
+            <div className="w-full aspect-video flex items-center justify-center text-text-secondary gap-2">
+              <ImageIcon />
+              <span className="text-sm">Image post</span>
+            </div>
+          )}
+        </div>
+      )}
+      {post.post_type === 'video' && (
+        <div className="mb-4 rounded overflow-hidden bg-bg-tertiary">
+          {post.media_url ? (
+            <video controls src={post.media_url} className="w-full max-h-[480px]" />
+          ) : (
+            <div className="w-full aspect-video flex items-center justify-center text-text-secondary gap-2">
+              <PlayIcon />
+              <span className="text-sm">Video post</span>
+              {post.media_duration_seconds && (
+                <span className="text-xs bg-black/60 text-white px-1.5 py-0.5 rounded">
+                  {Math.floor(post.media_duration_seconds / 60)}:{String(post.media_duration_seconds % 60).padStart(2, '0')}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Body */}
       {post.body && post.body.trim().length > 0 && (
-        <div className="text-sm text-text-primary whitespace-pre-wrap leading-relaxed mb-4 border-t border-border pt-3">
-          {post.body}
+        <div className="text-sm text-text-primary mb-4 border-t border-border pt-3">
+          <MarkdownBody>{post.body}</MarkdownBody>
         </div>
       )}
 
@@ -121,6 +167,25 @@ function CommentIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4">
       <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    </svg>
+  );
+}
+
+function ImageIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-8 h-8">
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <circle cx="8.5" cy="8.5" r="1.5" />
+      <polyline points="21 15 16 10 5 21" />
+    </svg>
+  );
+}
+
+function PlayIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-8 h-8">
+      <circle cx="12" cy="12" r="10" />
+      <polygon points="10 8 16 12 10 16 10 8" />
     </svg>
   );
 }

@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import VoteButton from './VoteButton';
 import apiClient from '../api/client';
 import { useSession } from '../store/useSession';
+import { useActivityTracker } from '../hooks/useActivityTracker';
 import type { FeedPost, VoteValue } from 'shared/types';
 
 interface PostCardProps {
@@ -16,6 +17,7 @@ export default function PostCard({ post, showCommunity = true, currentVote = 0 }
   const { user } = useSession();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { track } = useActivityTracker();
 
   const voteMutation = useMutation({
     mutationFn: (value: VoteValue) =>
@@ -47,6 +49,7 @@ export default function PostCard({ post, showCommunity = true, currentVote = 0 }
       return;
     }
     voteMutation.mutate(value);
+    track(value === 1 ? 'upvote' : 'downvote', post.id, 'post');
   };
 
   const postUrl = `/r/${post.community_name}/${post.id}`;
@@ -116,7 +119,11 @@ export default function PostCard({ post, showCommunity = true, currentVote = 0 }
           </div>
 
           {/* Title */}
-          <Link to={postUrl} className="block group-hover:text-accent transition-colors">
+          <Link
+            to={postUrl}
+            className="block group-hover:text-accent transition-colors"
+            onClick={() => track('view_post', post.id, 'post')}
+          >
             <h2 className="text-base font-semibold text-text-primary leading-snug mb-1">
               {post.title}
               {post.flair && (
@@ -127,9 +134,43 @@ export default function PostCard({ post, showCommunity = true, currentVote = 0 }
             </h2>
           </Link>
 
+          {/* Media stubs */}
+          {post.post_type === 'image' && (
+            <Link to={postUrl} onClick={() => track('view_post', post.id, 'post')}>
+              {post.media_url || post.thumbnail_url ? (
+                <div className="mt-1 mb-2 rounded overflow-hidden bg-bg-tertiary max-h-64 flex items-center justify-center">
+                  <img
+                    src={post.thumbnail_url ?? post.media_url ?? ''}
+                    alt=""
+                    className="max-h-64 w-full object-cover"
+                    loading="lazy"
+                  />
+                </div>
+              ) : (
+                <div className="mt-1 mb-2 rounded bg-bg-tertiary aspect-video flex items-center justify-center text-text-secondary gap-2 text-sm">
+                  <ImageIcon />
+                  Image post
+                </div>
+              )}
+            </Link>
+          )}
+          {post.post_type === 'video' && (
+            <Link to={postUrl} onClick={() => track('view_post', post.id, 'post')}>
+              <div className="mt-1 mb-2 rounded bg-bg-tertiary aspect-video flex items-center justify-center text-text-secondary gap-2 text-sm">
+                <VideoIcon />
+                Video
+                {post.media_duration_seconds && (
+                  <span className="text-xs bg-black/40 text-white px-1 py-0.5 rounded">
+                    {Math.floor(post.media_duration_seconds / 60)}:{String(post.media_duration_seconds % 60).padStart(2, '0')}
+                  </span>
+                )}
+              </div>
+            </Link>
+          )}
+
           {/* Body preview */}
-          {bodyPreview && (
-            <Link to={postUrl}>
+          {bodyPreview && post.post_type !== 'image' && post.post_type !== 'video' && (
+            <Link to={postUrl} onClick={() => track('view_post', post.id, 'post')}>
               <p className="text-sm text-text-secondary leading-relaxed line-clamp-3">
                 {bodyPreview}
               </p>
@@ -159,6 +200,25 @@ export default function PostCard({ post, showCommunity = true, currentVote = 0 }
         </div>
       </div>
     </article>
+  );
+}
+
+function ImageIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5">
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <circle cx="8.5" cy="8.5" r="1.5" />
+      <polyline points="21 15 16 10 5 21" />
+    </svg>
+  );
+}
+
+function VideoIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5">
+      <polygon points="23 7 16 12 23 17 23 7" />
+      <rect x="1" y="5" width="15" height="14" rx="2" />
+    </svg>
   );
 }
 

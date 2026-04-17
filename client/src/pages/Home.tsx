@@ -1,30 +1,45 @@
 import { useRef, useEffect, useState } from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Sidebar from '../components/Sidebar';
 import PostCard from '../components/PostCard';
 import apiClient from '../api/client';
+import { useSession } from '../store/useSession';
 import type { FeedPost, PaginatedResponse, SortOption } from 'shared/types';
 
 const SORT_OPTIONS: { value: SortOption; label: string }[] = [
+  { value: 'foryou', label: '✦ For You' },
   { value: 'hot', label: '🔥 Hot' },
   { value: 'new', label: '✨ New' },
   { value: 'top', label: '🏆 Top' },
 ];
 
 export default function Home() {
+  const { user } = useSession();
   const [sort, setSort] = useState<SortOption>('hot');
   const sentinelRef = useRef<HTMLDivElement>(null);
+
+  const isPersonalized = sort === 'foryou';
 
   const { data, fetchNextPage, hasNextPage, isPending, isFetchingNextPage, isError } =
     useInfiniteQuery({
       queryKey: ['feed', sort],
-      queryFn: ({ pageParam }) =>
-        apiClient
+      queryFn: ({ pageParam }) => {
+        if (isPersonalized && user) {
+          return apiClient
+            .get<PaginatedResponse<FeedPost>>('/feed/personalized', {
+              params: { cursor: pageParam, limit: 25 },
+            })
+            .then((r) => r.data);
+        }
+        const apiSort = isPersonalized ? 'hot' : sort;
+        return apiClient
           .get<PaginatedResponse<FeedPost>>('/feed', {
-            params: { sort, cursor: pageParam, limit: 25 },
+            params: { sort: apiSort, cursor: pageParam, limit: 25 },
           })
-          .then((r) => r.data),
+          .then((r) => r.data);
+      },
       initialPageParam: null as string | null,
       getNextPageParam: (lastPage) => lastPage.nextCursor,
       gcTime: 60_000,
@@ -57,12 +72,12 @@ export default function Home() {
         {/* Feed */}
         <main className="flex-1 min-w-0">
           {/* Sort tabs */}
-          <div className="flex items-center gap-1 mb-4 bg-bg-secondary border border-border rounded-lg p-1">
+          <div className="flex items-center gap-1 mb-4 bg-bg-secondary border border-border rounded-lg p-1 overflow-x-auto">
             {SORT_OPTIONS.map((opt) => (
               <button
                 key={opt.value}
                 onClick={() => setSort(opt.value)}
-                className={`flex-1 py-1.5 px-3 rounded text-sm font-medium transition-colors ${
+                className={`flex-1 min-w-fit py-1.5 px-3 rounded text-sm font-medium transition-colors whitespace-nowrap ${
                   sort === opt.value
                     ? 'bg-accent text-white'
                     : 'text-text-secondary hover:text-text-primary hover:bg-bg-tertiary'
@@ -72,6 +87,14 @@ export default function Home() {
               </button>
             ))}
           </div>
+
+          {/* For You login prompt */}
+          {isPersonalized && !user && (
+            <div className="text-center py-8 text-text-secondary text-sm border border-border rounded-lg bg-bg-secondary mb-4">
+              <p className="font-medium mb-1">Log in for a personalized feed</p>
+              <Link to="/login" className="text-accent hover:underline">Log in</Link>
+            </div>
+          )}
 
           {/* Posts */}
           {isPending && <PostSkeleton count={5} />}

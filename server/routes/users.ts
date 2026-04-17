@@ -149,4 +149,77 @@ router.get('/:username/comments', (req, res) => {
   res.json(response);
 });
 
+router.get('/:username/stats', (req, res) => {
+  const user = db
+    .prepare('SELECT id FROM users WHERE username = ?')
+    .get(req.params.username) as { id: number } | undefined;
+  if (!user) {
+    res.status(404).json({ error: 'User not found' });
+    return;
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  const monthAgo = now - 30 * 24 * 3600;
+
+  const postStats = db.prepare(`
+    SELECT COALESCE(SUM(score), 0) AS post_karma,
+           COALESCE(AVG(score), 0) AS avg_post_score,
+           COUNT(*) AS total_posts
+    FROM posts
+    WHERE user_id = ? AND is_removed = 0
+  `).get(user.id) as { post_karma: number; avg_post_score: number; total_posts: number };
+
+  const commentStats = db.prepare(`
+    SELECT COALESCE(SUM(score), 0) AS comment_karma,
+           COALESCE(AVG(score), 0) AS avg_comment_score
+    FROM comments
+    WHERE user_id = ? AND is_removed = 0
+  `).get(user.id) as { comment_karma: number; avg_comment_score: number };
+
+  const postsThisMonth = (db.prepare(`
+    SELECT COUNT(*) AS cnt FROM posts
+    WHERE user_id = ? AND is_removed = 0 AND created_at >= ?
+  `).get(user.id, monthAgo) as { cnt: number }).cnt;
+
+  const commentsThisMonth = (db.prepare(`
+    SELECT COUNT(*) AS cnt FROM comments
+    WHERE user_id = ? AND is_removed = 0 AND created_at >= ?
+  `).get(user.id, monthAgo) as { cnt: number }).cnt;
+
+  const topCommunities = db.prepare(`
+    SELECT c.name, c.display_name, COUNT(*) AS post_count
+    FROM posts p
+    JOIN communities c ON p.community_id = c.id
+    WHERE p.user_id = ? AND p.is_removed = 0
+    GROUP BY c.id
+    ORDER BY post_count DESC
+    LIMIT 3
+  `).all(user.id) as Array<{ name: string; display_name: string; post_count: number }>;
+
+  res.json({
+    post_karma: postStats.post_karma,
+    comment_karma: commentStats.comment_karma,
+    avg_post_score: Math.round(postStats.avg_post_score * 10) / 10,
+    avg_comment_score: Math.round(commentStats.avg_comment_score * 10) / 10,
+    top_communities: topCommunities,
+    posts_this_month: postsThisMonth,
+    comments_this_month: commentsThisMonth,
+  });
+});
+
+router.get('/:username/persona', (req, res) => {
+  const user = db
+    .prepare('SELECT id, username, display_name, is_real_user, personality, communication_style, interests, political_lean, age, location, occupation FROM users WHERE username = ?')
+    .get(req.params.username) as Record<string, unknown> | undefined;
+  if (!user) {
+    res.status(404).json({ error: 'User not found' });
+    return;
+  }
+  if (user.is_real_user) {
+    res.status(403).json({ error: 'Persona not available for real users' });
+    return;
+  }
+  res.json(user);
+});
+
 export default router;

@@ -1,3 +1,4 @@
+import { useState, useRef, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useSession } from '../store/useSession';
 import apiClient from '../api/client';
@@ -6,6 +7,31 @@ export default function Navbar() {
   const { user, theme, toggleTheme, getResolvedTheme, clearUser } = useSession();
   const resolved = getResolvedTheme();
   const navigate = useNavigate();
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<{ id: number; title: string; community_name: string }[]>([]);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchRef = useRef<HTMLDivElement>(null);
+
+  const handleSearchChange = useCallback((q: string) => {
+    setSearchQuery(q);
+    if (searchDebounce.current) clearTimeout(searchDebounce.current);
+    if (!q.trim()) { setSearchResults([]); return; }
+    searchDebounce.current = setTimeout(async () => {
+      try {
+        const r = await apiClient.get('/search', { params: { q, type: 'posts', limit: 5 } });
+        setSearchResults(r.data.items ?? []);
+      } catch { setSearchResults([]); }
+    }, 300);
+  }, []);
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && searchQuery.trim()) {
+      setSearchOpen(false);
+      navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
+    }
+  };
 
   const handleLogout = async () => {
     try {
@@ -29,18 +55,63 @@ export default function Navbar() {
           SocialForge
         </Link>
 
-        {/* Search stub — desktop only */}
-        <div className="hidden md:flex flex-1 max-w-sm mx-auto">
-          <div className="w-full flex items-center gap-2 bg-bg-tertiary border border-border rounded-full px-3 py-1.5 text-text-secondary text-sm">
+        {/* Search — desktop only */}
+        <div className="hidden md:flex flex-1 max-w-sm mx-auto relative" ref={searchRef}>
+          <div className="w-full flex items-center gap-2 bg-bg-tertiary border border-border rounded-full px-3 py-1.5 text-sm focus-within:border-accent transition-colors">
             <SearchIcon />
-            <span>Search (coming soon)</span>
+            <input
+              type="text"
+              placeholder="Search posts…"
+              value={searchQuery}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              onFocus={() => setSearchOpen(true)}
+              onBlur={() => setTimeout(() => setSearchOpen(false), 150)}
+              onKeyDown={handleSearchKeyDown}
+              className="flex-1 bg-transparent outline-none text-text-primary placeholder:text-text-secondary"
+            />
           </div>
+          {searchOpen && searchQuery.trim() && (
+            <div className="absolute top-full left-0 right-0 mt-1 bg-bg-secondary border border-border rounded-lg shadow-lg z-50 overflow-hidden">
+              {searchResults.length > 0 ? searchResults.map((r) => (
+                <Link
+                  key={r.id}
+                  to={`/r/${r.community_name}/${r.id}`}
+                  className="block px-3 py-2 hover:bg-bg-tertiary transition-colors"
+                >
+                  <div className="text-sm text-text-primary truncate">{r.title}</div>
+                  <div className="text-xs text-text-secondary">r/{r.community_name}</div>
+                </Link>
+              )) : (
+                <div className="px-3 py-2 text-sm text-text-secondary">No results — press Enter to search</div>
+              )}
+              {searchQuery.trim() && (
+                <Link
+                  to={`/search?q=${encodeURIComponent(searchQuery.trim())}`}
+                  className="block px-3 py-2 text-xs text-accent border-t border-border hover:bg-bg-tertiary"
+                >
+                  See all results for "{searchQuery}"
+                </Link>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="flex-1 md:flex-none" />
 
         {/* Right side */}
         <div className="flex items-center gap-2">
+          {/* Activity bell */}
+          {user && (
+            <Link
+              to="/activity"
+              className="w-8 h-8 flex items-center justify-center text-text-secondary hover:text-text-primary hover:bg-bg-tertiary rounded-full transition-colors"
+              aria-label="Activity"
+              title="Activity"
+            >
+              <BellIcon />
+            </Link>
+          )}
+
           {/* Theme toggle */}
           <button
             onClick={toggleTheme}
@@ -111,6 +182,15 @@ export default function Navbar() {
           <GridIcon />
           <span className="text-xs">Browse</span>
         </Link>
+        {user && (
+          <Link
+            to="/activity"
+            className="flex flex-col items-center gap-0.5 text-text-secondary hover:text-accent transition-colors"
+          >
+            <BellIcon />
+            <span className="text-xs">Activity</span>
+          </Link>
+        )}
         {user?.is_real_user === 1 && (
           <Link
             to="/settings"
@@ -143,6 +223,15 @@ export default function Navbar() {
         )}
       </nav>
     </>
+  );
+}
+
+function BellIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5">
+      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+    </svg>
   );
 }
 

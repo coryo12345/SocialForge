@@ -14,6 +14,8 @@ import commentsRouter from './routes/comments.js';
 import usersRouter from './routes/users.js';
 import internalRouter from './routes/internal.js';
 import settingsRouter from './routes/settings.js';
+import searchRouter from './routes/search.js';
+import activityRouter from './routes/activity.js';
 import { startScoreUpdater } from './jobs/scoreUpdater.js';
 
 // Initialize DB (runs migrations on import — must be imported after config)
@@ -38,6 +40,7 @@ app.use(
 );
 
 app.use(express.json({ limit: '10mb' }));
+app.use(express.text({ type: 'text/plain' }));
 app.use(cookieParser());
 app.use(sessionMiddleware);
 
@@ -73,6 +76,8 @@ app.use('/api/posts', postsRouter);
 app.use('/api', commentsRouter);   // comments router uses /posts/:id/comments paths
 app.use('/api/users', usersRouter);
 app.use('/api/settings', settingsRouter);
+app.use('/api/search', searchRouter);
+app.use('/api/activity', activityRouter);
 
 // Production: serve client static files
 if (config.NODE_ENV === 'production') {

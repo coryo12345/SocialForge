@@ -68,6 +68,12 @@ export interface Post {
   scheduled_at: number;
   created_at: number;
   updated_at: number;
+  media_url: string | null;
+  media_type: 'image' | 'video' | null;
+  thumbnail_url: string | null;
+  media_width: number | null;
+  media_height: number | null;
+  media_duration_seconds: number | null;
 }
 
 export interface FeedPost extends Post {
@@ -143,6 +149,45 @@ export interface TrendingCommunity extends Community {
   total_score: number;
 }
 
-export type SortOption = 'hot' | 'new' | 'top';
+export interface UserRelationship {
+  id: number;
+  user_id_a: number;
+  user_id_b: number;
+  relationship_type: 'ally' | 'rival' | 'acquaintance' | 'fan';
+  strength: number;
+  notes: string | null;
+  created_at: number;
+}
+
+export interface UserMemory {
+  id: number;
+  user_id: number;
+  memory_type: 'opinion' | 'topic' | 'community_familiarity';
+  key: string;
+  value: string;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface UserStats {
+  post_karma: number;
+  comment_karma: number;
+  avg_post_score: number;
+  avg_comment_score: number;
+  top_communities: Array<{ name: string; display_name: string; post_count: number }>;
+  posts_this_month: number;
+  comments_this_month: number;
+}
+
+export interface ActivityItem {
+  id: string;
+  reason: 'new_comment_on_upvoted' | 'hot_in_community' | 'viral_viewed';
+  post?: FeedPost;
+  comment?: CommentWithAuthor & { community_name?: string };
+  community?: Pick<Community, 'id' | 'name' | 'display_name' | 'banner_color' | 'icon_seed'>;
+  created_at: number;
+}
+
+export type SortOption = 'hot' | 'new' | 'top' | 'foryou';
 export type CommentSortOption = 'best' | 'new' | 'old' | 'controversial';
 export type VoteValue = -1 | 0 | 1;

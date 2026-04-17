@@ -253,6 +253,161 @@ router.get('/users/random', (req, res) => {
   res.json(users);
 });
 
+// GET /api/internal/users/all — all AI users (for generate_relationships.py)
+router.get('/users/all', (req, res) => {
+  const users = db
+    .prepare('SELECT * FROM users WHERE is_real_user = 0 ORDER BY id')
+    .all();
+  res.json(users);
+});
+
+// GET /api/internal/users/:user_id/posts
+router.get('/users/:user_id/posts', (req, res) => {
+  const userId = parseInt(req.params.user_id);
+  const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
+  const posts = db
+    .prepare(
+      `SELECT p.id, p.title, p.body, p.score, p.scheduled_at,
+              c.name AS community_name
+       FROM posts p
+       JOIN communities c ON p.community_id = c.id
+       WHERE p.user_id = ? AND p.is_removed = 0
+       ORDER BY p.scheduled_at DESC LIMIT ?`,
+    )
+    .all(userId, limit);
+  res.json(posts);
+});
+
+// GET /api/internal/users/:user_id/comments
+router.get('/users/:user_id/comments', (req, res) => {
+  const userId = parseInt(req.params.user_id);
+  const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
+  const comments = db
+    .prepare(
+      `SELECT c.id, c.body, c.score, c.scheduled_at,
+              comm.name AS community_name,
+              p.title AS post_title
+       FROM comments c
+       JOIN posts p ON c.post_id = p.id
+       JOIN communities comm ON p.community_id = comm.id
+       WHERE c.user_id = ? AND c.is_removed = 0
+       ORDER BY c.scheduled_at DESC LIMIT ?`,
+    )
+    .all(userId, limit);
+  res.json(comments);
+});
+
+// GET /api/internal/relationships?user_id=X
+router.get('/relationships', (req, res) => {
+  const userId = parseInt(req.query.user_id as string);
+  if (isNaN(userId)) {
+    res.status(400).json({ error: 'user_id required' });
+    return;
+  }
+  const rows = db
+    .prepare(
+      `SELECT r.*,
+              ua.username AS user_a_username, ua.display_name AS user_a_display_name,
+              ub.username AS user_b_username, ub.display_name AS user_b_display_name
+       FROM user_relationships r
+       JOIN users ua ON r.user_id_a = ua.id
+       JOIN users ub ON r.user_id_b = ub.id
+       WHERE r.user_id_a = ? OR r.user_id_b = ?`,
+    )
+    .all(userId, userId);
+  res.json(rows);
+});
+
+// POST /api/internal/relationships/bulk
+router.post('/relationships/bulk', (req, res) => {
+  const { relationships } = req.body as {
+    relationships: Array<{
+      user_id_a: number;
+      user_id_b: number;
+      relationship_type: string;
+      strength: number;
+      notes?: string;
+    }>;
+  };
+  if (!Array.isArray(relationships) || relationships.length === 0) {
+    res.status(400).json({ error: 'relationships array required' });
+    return;
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  const insert = db.prepare(
+    `INSERT OR REPLACE INTO user_relationships
+       (user_id_a, user_id_b, relationship_type, strength, notes, created_at)
+     VALUES (@user_id_a, @user_id_b, @relationship_type, @strength, @notes, @created_at)`,
+  );
+  const bulkInsert = db.transaction((rows: typeof relationships) => {
+    let count = 0;
+    for (const row of rows) {
+      insert.run({ ...row, notes: row.notes ?? null, created_at: now });
+      count++;
+    }
+    return count;
+  });
+
+  const count = bulkInsert(relationships);
+  res.json({ inserted: count });
+});
+
+// GET /api/internal/memory?user_id=X[&memory_type=Y]
+router.get('/memory', (req, res) => {
+  const userId = parseInt(req.query.user_id as string);
+  if (isNaN(userId)) {
+    res.status(400).json({ error: 'user_id required' });
+    return;
+  }
+  const memoryType = req.query.memory_type as string | undefined;
+  let rows: unknown[];
+  if (memoryType) {
+    rows = db
+      .prepare(`SELECT * FROM user_memory WHERE user_id = ? AND memory_type = ? ORDER BY updated_at DESC`)
+      .all(userId, memoryType);
+  } else {
+    rows = db
+      .prepare(`SELECT * FROM user_memory WHERE user_id = ? ORDER BY memory_type, updated_at DESC`)
+      .all(userId);
+  }
+  res.json(rows);
+});
+
+// POST /api/internal/memory/bulk
+router.post('/memory/bulk', (req, res) => {
+  const { memories } = req.body as {
+    memories: Array<{
+      user_id: number;
+      memory_type: string;
+      key: string;
+      value: string;
+    }>;
+  };
+  if (!Array.isArray(memories) || memories.length === 0) {
+    res.status(400).json({ error: 'memories array required' });
+    return;
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  const upsert = db.prepare(
+    `INSERT INTO user_memory (user_id, memory_type, key, value, created_at, updated_at)
+     VALUES (@user_id, @memory_type, @key, @value, @created_at, @updated_at)
+     ON CONFLICT(user_id, memory_type, key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+  );
+  const bulkUpsert = db.transaction((rows: typeof memories) => {
+    let count = 0;
+    for (const row of rows) {
+      upsert.run({ ...row, created_at: now, updated_at: now });
+      count++;
+    }
+    return count;
+  });
+
+  const count = bulkUpsert(memories);
+  res.json({ upserted: count });
+});
+
 // GET /api/internal/posts/recent
 router.get('/posts/recent', (req, res) => {
   const now = Math.floor(Date.now() / 1000);

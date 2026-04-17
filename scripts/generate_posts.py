@@ -120,6 +120,36 @@ def fetch_random_user() -> dict | None:
     return None
 
 
+def fetch_user_memory(user_id: int) -> list:
+    try:
+        resp = req.get(
+            f"{APP_API_URL}/internal/memory",
+            params={"user_id": user_id},
+            headers=INTERNAL_HEADERS,
+            timeout=10,
+        )
+        if resp.ok:
+            return resp.json()
+    except Exception:
+        pass
+    return []
+
+
+def build_memory_section(memories: list) -> str:
+    if not memories:
+        return ""
+    opinions = [m for m in memories if m["memory_type"] == "opinion"]
+    topics = [m for m in memories if m["memory_type"] == "topic"]
+    lines = []
+    if opinions:
+        lines.append("Your known opinions: " + "; ".join(f"{m['key']}: {m['value']}" for m in opinions[:3]))
+    if topics:
+        lines.append("Topics you frequently discuss: " + ", ".join(m["key"] for m in topics[:3]))
+    if not lines:
+        return ""
+    return "\n" + "\n".join(lines) + "\nStay consistent with these when relevant.\n"
+
+
 def main():
     parser = argparse.ArgumentParser(description="Generate AI posts for a given date")
     parser.add_argument("--date", default="today", help="Date in YYYY-MM-DD format or 'today'")
@@ -132,6 +162,7 @@ def main():
     ollama_temp = float(settings.get("ollama_temperature", 0.8))
     viral_prob = float(settings.get("viral_post_probability", 0.05))
     title_only_ratio = float(settings.get("title_only_post_ratio", 0.3))
+    use_memory = settings.get("memory_enabled", "true").lower() == "true"
 
     count_min = int(settings.get("posts_per_day_min", 50))
     count_max = int(settings.get("posts_per_day_max", 150))
@@ -196,6 +227,13 @@ def main():
             )
             if style_prompt:
                 recent_section += f"\nPosting style for this community:\n{style_prompt}\n"
+
+            memory_section = ""
+            if use_memory:
+                memories = fetch_user_memory(user["id"])
+                memory_section = build_memory_section(memories)
+            if memory_section:
+                recent_section = memory_section + recent_section
 
             min_paragraphs = random.randint(1,3)
             prompt = PROMPT_TEMPLATE.format(
