@@ -222,6 +222,7 @@ def generate_comment_tree(
     # Generate top-level comments
     top_level_count = min(total, max_top_level)
     top_level_comments: list[dict] = []
+    _comment_by_temp_id: dict[int, dict] = {}
 
     for i in range(top_level_count):
         user = pick_user(used_user_ids if i < len(users) else set())
@@ -256,8 +257,6 @@ def generate_comment_tree(
         print(f"    [{community_name}] top-level comment {i+1}/{top_level_count}")
 
     # Thread context: track ancestors for deep replies
-    _comment_by_temp_id: dict[int, dict] = {}
-
     def get_thread_context(parent: dict, max_ancestors: int = 3) -> str:
         """Build a short thread context string from ancestors."""
         chain = []
