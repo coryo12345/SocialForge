@@ -5,7 +5,6 @@ A self-hosted, AI-generated social media simulator. Generates and displays a con
 ---
 
 ## TODOs
-- migrations system
 - need to beef up the post generation system to have more voice and purpose. do ideation -> plot generation -> writing as separate steps
 - nuclearrevenge/pettyrevenge descriptions is NOT prompting for the right content lol
 - search
