@@ -1,34 +1,137 @@
-"""Generate AI posts for a given date and insert them into the database."""
+"""Generate AI posts using a 3-stage pipeline: Ideation → Outline → Writing."""
 
 import argparse
 import random
+import re
 import time
 import json
 import datetime
 import requests as req
 from config import APP_API_URL, INTERNAL_HEADERS, ollama_generate, extract_json, load_settings
-from random_seed import (
-    POST_FORMATS, EMOTIONAL_REGISTERS, POST_ANGLES,
-    NARRATIVE_POST_FORMATS, NARRATIVE_EMOTIONAL_REGISTERS, NARRATIVE_POST_ANGLES,
+from random_seed import random_ideation_hints
+
+
+# ── Stage prompt builders ────────────────────────────────────────────────────
+
+def build_ideation_prompt(user: dict, community: dict, recent_titles: list[str],
+                          format_hint: str, register_hint: str, angle_hint: str) -> str:
+    personality = json.loads(user.get("personality") or "[]")
+    interests = json.loads(user.get("interests") or "[]")
+    is_narrative = bool(community.get("is_narrative"))
+
+    if is_narrative:
+        narrative_instruction = (
+            "This community is for personal stories. Your premise must describe a real incident: "
+            "who the other person was, what they did, and what you did in response."
+        )
+    else:
+        community_topic = community.get("description") or community["name"]
+        narrative_instruction = (
+            f"This community is for {community_topic}. Your premise should describe a specific "
+            "question, rant, experience, or opinion — not a general discussion topic."
+        )
+
+    recent_section = ""
+    if recent_titles:
+        recent_section = f"Do NOT write about any of these recently posted topics: {recent_titles}\n\n"
+
+    return f"""You are {user['display_name']}, a {user.get('age') or 'unknown'}-year-old {user.get('occupation') or 'professional'} from {user.get('location') or 'somewhere'}.
+About you: {user.get('bio') or 'No bio available.'}
+Your personality: {', '.join(personality) if personality else 'curious'}.
+Your interests: {', '.join(interests) if interests else 'various topics'}.
+
+You are about to write a post in r/{community['name']}.
+{narrative_instruction}
+
+Tone hint for this post: {register_hint}
+Angle hint: {angle_hint}
+Format hint: {format_hint}
+
+Come up with a SPECIFIC, CONCRETE premise for a post. Name real circumstances.
+Do not be generic. Do not summarize. If your premise could apply to anyone, it is too vague.
+
+{recent_section}Respond with ONLY a JSON object:
+{{
+  "premise": "one or two sentences describing the specific situation or question for this post",
+  "is_title_only": false
+}}"""
+
+
+def build_outline_prompt(user: dict, community: dict, premise: str) -> str:
+    personality = json.loads(user.get("personality") or "[]")
+    is_narrative = bool(community.get("is_narrative"))
+    community_type = "personal story community" if is_narrative else "discussion community"
+    post_style_section = ""
+    if community.get("post_style_prompt"):
+        post_style_section = f"\nPosting style for this community:\n{community['post_style_prompt']}\n"
+
+    return f"""You are {user['display_name']}. You have a post idea:
+
+PREMISE: {premise}
+
+You are posting in r/{community['name']} ({community_type}).
+Your personality: {', '.join(personality) if personality else 'curious'}.
+Your political lean: {user.get('political_lean') or 'centrist'}.
+{post_style_section}
+Create an ordered outline for this post. List 4-8 bullet points.
+Each bullet must be a specific detail, scene beat, or point to make — not a vague category.
+Write what to actually say, not instructions like "describe the conflict."
+
+Respond with ONLY a **VALID** JSON object:
+{{
+  "outline": ["bullet 1", "bullet 2", ...]
+}}"""
+
+
+def build_writing_prompt(user: dict, community: dict, premise: str, outline: list[str]) -> str:
+    personality = json.loads(user.get("personality") or "[]")
+    numbered = "\n".join(f"{i+1}. {point}" for i, point in enumerate(outline))
+
+    return f"""You are {user['display_name']}. Write a Reddit post for r/{community['name']}.
+
+YOUR PREMISE: {premise}
+
+YOUR OUTLINE (cover every point, in order):
+{numbered}
+
+YOUR WRITING STYLE: {user.get('writing_style') or 'conversational, natural Reddit prose'}
+YOUR PERSONALITY: {', '.join(personality) if personality else 'curious'}
+
+Rules:
+- Write in first person. Be this person, do not describe them.
+- Add specific invented details wherever the outline is sparse (names, dollar amounts, timeframes, locations). Specificity makes posts feel real.
+- Match the writing style exactly — if it says short sentences and line breaks, do that.
+- Do not write a tidy conclusion if the situation is unresolved.
+- Title should hook the reader but not spoil the whole post.
+
+Respond with ONLY a JSON object, you **must** include a title, and the output MUST be **VALID** JSON. Be sure to include commas between properties.
+{{
+  "title": "post title (max 300 chars)",
+  "body": "full post body, or empty string for title-only posts",
+  "flair": "a short flair tag like Discussion / Rant / Question / Story, or null"
+}}"""
+
+
+# ── Validation ───────────────────────────────────────────────────────────────
+
+_SPECIFIC_NOUN_RE = re.compile(
+    r'\b(\d+[\.,]?\d*\s*(dollar|cent|year|month|week|day|hour|minute|k|%|lb|kg|miles?|km)?'
+    r'|\$\d+'
+    r'|[A-Z][a-z]{2,}'  # Capitalized proper noun
+    r'|yesterday|today|tomorrow|last\s+\w+|this\s+\w+)\b',
+    re.IGNORECASE,
 )
 
-PROMPT_TEMPLATE = """You are {display_name}, a {age}-year-old {occupation} from {location}.
-Your personality: {personality}. You write online like this: {communication_style}.
-Your interests include: {interests}.
 
-Write {post_format} in r/{community_name} (topic: {community_topic}).
-Emotional register: {emotional_register}.
-Write it {post_angle}.
+def is_valid_premise(premise: str) -> bool:
+    if len(premise.split()) < 15:
+        return False
+    if not _SPECIFIC_NOUN_RE.search(premise):
+        return False
+    return True
 
-Do not write a generic discussion post. The format and tone above are mandatory.
-{recent_section}
-Respond with ONLY a JSON object with these exact fields:
-- title (string, max 300 chars, the post title)
-- body (string, the post body — {min_paragraph}-{max_paragraph} paragraphs OR empty string "" for title-only posts; about 10% should be title-only)
-- flair (string or null, a relevant flair tag like "Discussion", "News", "Question", "Rant", etc.)
 
-No other text. Just the JSON object."""
-
+# ── Utility ──────────────────────────────────────────────────────────────────
 
 def random_score(viral_prob: float = 0.05) -> tuple[int, int, int]:
     """Returns (score, upvote_count, downvote_count) using Pareto distribution."""
@@ -37,7 +140,6 @@ def random_score(viral_prob: float = 0.05) -> tuple[int, int, int]:
     if random.random() < viral_prob:
         score = random.randint(500, 5000)
     score = min(score, 10000)
-    # Realistic up/down counts
     ratio = random.uniform(0.85, 0.99)
     upvotes = max(score, int(score / ratio)) if score > 0 else random.randint(0, 5)
     downvotes = max(0, upvotes - score)
@@ -64,7 +166,6 @@ def flush_posts(batch: list) -> int:
 
 def random_scheduled_at(date: datetime.date) -> int:
     """Return a Unix timestamp within the given date, weighted toward daytime hours."""
-    # Hours 9-22 get 3x weight, hour 23 gets 2x, hours 0-8 get 1x
     weights = [1, 1, 1, 1, 1, 1, 1, 1, 1, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 2]
     hour = random.choices(range(24), weights=weights)[0]
     minute = random.randint(0, 59)
@@ -120,35 +221,98 @@ def fetch_random_user() -> dict | None:
     return None
 
 
-def fetch_user_memory(user_id: int) -> list:
-    try:
-        resp = req.get(
-            f"{APP_API_URL}/internal/memory",
-            params={"user_id": user_id},
-            headers=INTERNAL_HEADERS,
-            timeout=10,
-        )
-        if resp.ok:
-            return resp.json()
-    except Exception:
-        pass
-    return []
+# ── 3-stage pipeline ─────────────────────────────────────────────────────────
+
+def generate_post_3stage(
+    user: dict,
+    community: dict,
+    recent_titles: list[str],
+    target_date: datetime.date,
+    ollama_model: str | None,
+    temp_ideation: float,
+    temp_outline: float,
+    temp_writing: float,
+    viral_prob: float,
+) -> dict | None:
+    is_narrative = bool(community.get("is_narrative"))
+    format_hint, register_hint, angle_hint = random_ideation_hints(is_narrative)
+
+    # Stage 1: Ideation
+    ideation_prompt = build_ideation_prompt(
+        user, community, recent_titles, format_hint, register_hint, angle_hint
+    )
+    raw1 = ollama_generate(ideation_prompt, model=ollama_model, temperature=temp_ideation,
+                           num_predict=200)
+    data1 = extract_json(raw1)
+    if not data1 or not data1.get("premise"):
+        print(f"    Stage 1 failed: no premise")
+        return None
+
+    premise = str(data1["premise"]).strip()
+    if not is_valid_premise(premise):
+        # One retry
+        raw1b = ollama_generate(ideation_prompt, model=ollama_model, temperature=temp_ideation,
+                                num_predict=200)
+        data1b = extract_json(raw1b)
+        if data1b and data1b.get("premise"):
+            premise = str(data1b["premise"]).strip()
+        if not is_valid_premise(premise):
+            print(f"    Stage 1 failed validation: premise too vague: {premise[:60]}")
+            return None
+
+    is_title_only = bool(data1.get("is_title_only", False))
+    print(f"    Premise: {premise[:80]}")
+
+    # Stage 2: Outline
+    outline_prompt = build_outline_prompt(user, community, premise)
+    raw2 = ollama_generate(outline_prompt, model=ollama_model, temperature=temp_outline,
+                           num_predict=400)
+    data2 = extract_json(raw2)
+    if not data2 or not isinstance(data2.get("outline"), list) or len(data2["outline"]) < 2:
+        print(f"    Stage 2 failed: no outline")
+        return None
+
+    outline = [str(b) for b in data2["outline"][:8]]
+
+    # Stage 3: Writing
+    writing_prompt = build_writing_prompt(user, community, premise, outline)
+    raw3 = ollama_generate(writing_prompt, model=ollama_model, temperature=temp_writing)
+    data3 = extract_json(raw3)
+    # one retry
+    if not data3:
+        print(f"    Stage 3: Not valid JSON, trying again...")
+        raw3 = ollama_generate(writing_prompt, model=ollama_model, temperature=temp_writing)
+        data3 = extract_json(raw3)
+    if not data3:
+        print(f"    Stage 3 failed: invalid JSON")
+        return None
+    if "title" not in data3:
+        print(f"    Stage 3 failed: no title in output")
+        return None
+
+    body = str(data3.get("body") or "")
+    if is_title_only:
+        body = ""
+
+    now = int(time.time())
+    score, upvotes, downvotes = random_score(viral_prob)
+    return {
+        "community_name": community["name"],
+        "username": user["username"],
+        "title": str(data3["title"])[:300],
+        "body": body,
+        "post_type": "text",
+        "score": score,
+        "upvote_count": upvotes,
+        "downvote_count": downvotes,
+        "flair": data3.get("flair"),
+        "scheduled_at": random_scheduled_at(target_date),
+        "created_at": now,
+        "updated_at": now,
+    }
 
 
-def build_memory_section(memories: list) -> str:
-    if not memories:
-        return ""
-    opinions = [m for m in memories if m["memory_type"] == "opinion"]
-    topics = [m for m in memories if m["memory_type"] == "topic"]
-    lines = []
-    if opinions:
-        lines.append("Your known opinions: " + "; ".join(f"{m['key']}: {m['value']}" for m in opinions[:3]))
-    if topics:
-        lines.append("Topics you frequently discuss: " + ", ".join(m["key"] for m in topics[:3]))
-    if not lines:
-        return ""
-    return "\n" + "\n".join(lines) + "\nStay consistent with these when relevant.\n"
-
+# ── Main ─────────────────────────────────────────────────────────────────────
 
 def main():
     parser = argparse.ArgumentParser(description="Generate AI posts for a given date")
@@ -159,10 +323,11 @@ def main():
 
     settings = load_settings()
     ollama_model = settings.get("ollama_model") or None
-    ollama_temp = float(settings.get("ollama_temperature", 0.8))
     viral_prob = float(settings.get("viral_post_probability", 0.05))
-    title_only_ratio = float(settings.get("title_only_post_ratio", 0.3))
-    use_memory = settings.get("memory_enabled", "true").lower() == "true"
+
+    temp_ideation = float(settings.get("post_ideation_temperature", 0.9))
+    temp_outline = float(settings.get("post_outline_temperature", 0.75))
+    temp_writing = float(settings.get("post_writing_temperature", 0.7))
 
     count_min = int(settings.get("posts_per_day_min", 50))
     count_max = int(settings.get("posts_per_day_max", 150))
@@ -173,9 +338,9 @@ def main():
         if args.date == "today"
         else datetime.date.fromisoformat(args.date)
     )
-    print(f"Generating {post_count} posts for {target_date}")
+    print(f"Generating {post_count} posts for {target_date} (3-stage pipeline)")
+    print(f"Temperatures: ideation={temp_ideation}, outline={temp_outline}, writing={temp_writing}")
 
-    # Fetch communities
     params = {}
     if args.community:
         params["search"] = args.community
@@ -194,12 +359,13 @@ def main():
     distribution = weighted_distribution(communities, post_count)
     batch = []
     total_inserted = 0
-    now = int(time.time())
     generated = 0
     failed = 0
 
     for item in distribution:
         community = item["community"]
+        recent_titles = fetch_recent_post_titles(community["name"])
+
         for _ in range(item["count"]):
             user = fetch_random_user()
             if not user:
@@ -207,79 +373,26 @@ def main():
                 failed += 1
                 continue
 
-            personality = json.loads(user.get("personality") or "[]")
-            interests = json.loads(user.get("interests") or "[]")
-
-            is_narrative = bool(community.get("is_narrative"))
-            style_prompt = community.get("post_style_prompt") or ""
-            if is_narrative:
-                fmt = random.choice(NARRATIVE_POST_FORMATS)
-                tone = random.choice(NARRATIVE_EMOTIONAL_REGISTERS)
-                angle = random.choice(NARRATIVE_POST_ANGLES)
-            else:
-                fmt = random.choice(POST_FORMATS)
-                tone = random.choice(EMOTIONAL_REGISTERS)
-                angle = random.choice(POST_ANGLES)
-            recent = fetch_recent_post_titles(community["name"])
-            recent_section = (
-                f"Do not write about any of these recently posted topics: {recent}\n"
-                if recent else ""
-            )
-            if style_prompt:
-                recent_section += f"\nPosting style for this community:\n{style_prompt}\n"
-
-            memory_section = ""
-            if use_memory:
-                memories = fetch_user_memory(user["id"])
-                memory_section = build_memory_section(memories)
-            if memory_section:
-                recent_section = memory_section + recent_section
-
-            min_paragraphs = random.randint(1,3)
-            prompt = PROMPT_TEMPLATE.format(
-                display_name=user["display_name"],
-                age=user.get("age") or "unknown",
-                occupation=user.get("occupation") or "professional",
-                location=user.get("location") or "somewhere",
-                personality=", ".join(personality) if personality else "curious",
-                communication_style=user.get("communication_style") or "normal",
-                interests=", ".join(interests) if interests else "various topics",
-                community_name=community["name"],
-                community_topic=community.get("description") or community["name"],
-                post_format=fmt,
-                emotional_register=tone,
-                post_angle=angle,
-                recent_section=recent_section,
-                min_paragraph=min_paragraphs,
-                max_paragraph=random.randint(min_paragraphs, 2*min_paragraphs+1),
+            print(f"  [{community['name']}] @{user['username']} — generating...")
+            post = generate_post_3stage(
+                user=user,
+                community=community,
+                recent_titles=recent_titles,
+                target_date=target_date,
+                ollama_model=ollama_model,
+                temp_ideation=temp_ideation,
+                temp_outline=temp_outline,
+                temp_writing=temp_writing,
+                viral_prob=viral_prob,
             )
 
-            raw = ollama_generate(prompt, model=ollama_model, temperature=ollama_temp)
-            data = extract_json(raw)
-
-            if not data or "title" not in data:
-                print(f"  FAILED post for r/{community['name']}")
+            if not post:
                 failed += 1
                 continue
 
-            score, upvotes, downvotes = random_score(viral_prob)
-            batch.append({
-                "community_name": community["name"],
-                "username": user["username"],
-                "title": str(data["title"])[:300],
-                "body": str(data.get("body") or ""),
-                "post_type": "text",
-                "score": score,
-                "upvote_count": upvotes,
-                "downvote_count": downvotes,
-                "flair": data.get("flair"),
-                "scheduled_at": random_scheduled_at(target_date),
-                "created_at": now,
-                "updated_at": now,
-            })
+            batch.append(post)
             generated += 1
-            title_preview = str(data["title"])[:60]
-            print(f"  [{community['name']}] {title_preview}")
+            print(f"    Title: {post['title'][:60]}")
             if len(batch) >= 5:
                 total_inserted += flush_posts(batch)
                 batch.clear()
@@ -289,7 +402,6 @@ def main():
         return
 
     total_inserted += flush_posts(batch)
-
     print(f"\nSummary: {generated} generated, {total_inserted} inserted, {failed} failed, date={target_date}")
 
 

@@ -238,10 +238,10 @@ export default function UserProfile() {
                     </div>
                   </div>
                 )}
-                {persona.communication_style && (
+                {persona.writing_style && (
                   <div>
-                    <p className="text-xs font-semibold text-text-secondary uppercase tracking-wide mb-1">Communication Style</p>
-                    <p className="text-sm text-text-primary">{persona.communication_style as string}</p>
+                    <p className="text-xs font-semibold text-text-secondary uppercase tracking-wide mb-1">Writing Style</p>
+                    <p className="text-sm text-text-primary">{persona.writing_style as string}</p>
                   </div>
                 )}
                 {(persona.occupation || persona.location || persona.age) && (

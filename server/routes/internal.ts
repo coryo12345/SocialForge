@@ -15,17 +15,18 @@ router.post('/users/bulk', (req, res) => {
   const insert = db.prepare(
     `INSERT OR IGNORE INTO users
        (username, display_name, avatar_seed, bio, age, location, occupation,
-        personality, communication_style, interests, political_lean,
+        personality, writing_style, interests, political_lean,
         is_real_user, karma, created_at)
      VALUES
        (@username, @display_name, @avatar_seed, @bio, @age, @location, @occupation,
-        @personality, @communication_style, @interests, @political_lean,
+        @personality, @writing_style, @interests, @political_lean,
         0, 0, @created_at)`,
   );
 
   const userDefaults = {
     bio: null, age: null, location: null, occupation: null,
-    personality: null, communication_style: null, interests: null, political_lean: null,
+    personality: null, writing_style: null,
+    interests: null, political_lean: null,
   };
 
   const bulkInsert = db.transaction((rows: Record<string, unknown>[]) => {
@@ -406,6 +407,22 @@ router.post('/memory/bulk', (req, res) => {
 
   const count = bulkUpsert(memories);
   res.json({ upserted: count });
+});
+
+// PATCH /api/internal/users/:id — update writing_style (used by backfill script)
+router.patch('/users/:id', (req, res) => {
+  const id = parseInt(req.params.id);
+  if (isNaN(id)) {
+    res.status(400).json({ error: 'invalid user id' });
+    return;
+  }
+  const { writing_style } = req.body as { writing_style?: string };
+  if (!writing_style) {
+    res.status(400).json({ error: 'writing_style required' });
+    return;
+  }
+  const result = db.prepare('UPDATE users SET writing_style = ? WHERE id = ?').run(writing_style, id);
+  res.json({ updated: result.changes });
 });
 
 // GET /api/internal/posts/recent

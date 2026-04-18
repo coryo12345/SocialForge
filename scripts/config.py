@@ -32,17 +32,23 @@ def load_settings() -> dict:
     return {}
 
 
-def ollama_generate(prompt: str, max_retries: int = 3, model: str | None = None, temperature: float | None = None) -> str | None:
+def ollama_generate(prompt: str, max_retries: int = 3, model: str | None = None,
+                    temperature: float | None = None, num_predict: int | None = None) -> str | None:
     """Call Ollama generate endpoint. Returns the response text or None on failure."""
     _model = model or OLLAMA_MODEL
-    _opts = {}
+    _opts: dict = {}
     if temperature is not None:
         _opts["temperature"] = temperature
+    if num_predict is not None:
+        _opts["num_predict"] = num_predict
     for attempt in range(max_retries):
         try:
+            payload: dict = {"model": _model, "prompt": prompt, "stream": False}
+            if _opts:
+                payload["options"] = _opts
             resp = requests.post(
                 f"{OLLAMA_BASE_URL}/api/generate",
-                json={"model": _model, "prompt": prompt, "stream": False, "options": _opts} if _opts else {"model": _model, "prompt": prompt, "stream": False},
+                json=payload,
                 timeout=120,
             )
             resp.raise_for_status()

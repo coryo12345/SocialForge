@@ -5,8 +5,9 @@ A self-hosted, AI-generated social media simulator. Generates and displays a con
 ---
 
 ## TODOs
-- need to beef up the post generation system to have more voice and purpose. do ideation -> plot generation -> writing as separate steps
+- VALIDATE: need to beef up the post generation system to have more voice and purpose. do ideation -> plot generation -> writing as separate steps
 - nuclearrevenge/pettyrevenge descriptions is NOT prompting for the right content lol
+- UI for adjusting community member counts
 - favicon
 
 ### Image generation things...

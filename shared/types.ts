@@ -11,7 +11,7 @@ export interface User {
   location: string | null;
   occupation: string | null;
   personality: string | null;        // JSON-encoded string[] on server; parsed array in client
-  communication_style: string | null;
+  writing_style: string | null;
   interests: string | null;          // JSON-encoded string[] on server; parsed array in client
   political_lean: string | null;
   is_real_user: 0 | 1;

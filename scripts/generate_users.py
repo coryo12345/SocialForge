@@ -18,7 +18,7 @@ def seeded_prompt_template(user_seed_words):
 - location (string, "City, Country" format)
 - occupation (string, their job or role)
 - personality (array of 3-5 trait words, e.g. ["curious", "sarcastic", "introverted"])
-- communication_style (string, 1 sentence describing how they write online)
+- writing_style (string, 1-2 sentences describing ONLY prose mechanics: typical sentence length and rhythm, use of line breaks, punctuation habits, vocabulary level, formatting tendencies like lists or headers. Do NOT mention topics or content areas.)
 - interests (array of 4-8 topic strings)
 - political_lean (one of exactly: "far-left", "center-left", "centrist", "center-right", "far-right", "libertarian", "apolitical")
 
@@ -31,7 +31,7 @@ Respond ONLY with the JSON object, no other text."""
 
 REQUIRED_FIELDS = [
     "username", "display_name", "bio", "age", "location", "occupation",
-    "personality", "communication_style", "interests", "political_lean",
+    "personality", "writing_style", "interests", "political_lean",
 ]
 
 VALID_POLITICAL = {
@@ -76,7 +76,7 @@ def generate_user() -> dict | None:
             "personality": json.dumps(
                 data["personality"] if isinstance(data["personality"], list) else []
             ),
-            "communication_style": str(data["communication_style"]),
+            "writing_style": str(data["writing_style"]),
             "interests": json.dumps(
                 data["interests"] if isinstance(data["interests"], list) else []
             ),

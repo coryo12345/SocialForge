@@ -209,7 +209,7 @@ router.get('/:username/stats', (req, res) => {
 
 router.get('/:username/persona', (req, res) => {
   const user = db
-    .prepare('SELECT id, username, display_name, is_real_user, personality, communication_style, interests, political_lean, age, location, occupation FROM users WHERE username = ?')
+    .prepare('SELECT id, username, display_name, is_real_user, personality, writing_style, interests, political_lean, age, location, occupation FROM users WHERE username = ?')
     .get(req.params.username) as Record<string, unknown> | undefined;
   if (!user) {
     res.status(404).json({ error: 'User not found' });

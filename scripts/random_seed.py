@@ -116,3 +116,11 @@ def random_user_seeds(n=3):
     chosen_categories = random.sample(USER_CATEGORIES, n)
     return [random.choice(cat) for cat in chosen_categories]
 
+
+def random_ideation_hints(is_narrative=False):
+    """Return (format_hint, register_hint, angle_hint) for Stage 1 ideation."""
+    formats = NARRATIVE_POST_FORMATS if is_narrative else POST_FORMATS
+    registers = NARRATIVE_EMOTIONAL_REGISTERS if is_narrative else EMOTIONAL_REGISTERS
+    angles = NARRATIVE_POST_ANGLES if is_narrative else POST_ANGLES
+    return random.choice(formats), random.choice(registers), random.choice(angles)
+

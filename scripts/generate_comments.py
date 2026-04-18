@@ -9,7 +9,7 @@ import requests as req
 from config import APP_API_URL, INTERNAL_HEADERS, ollama_generate, extract_json, load_settings
 
 TOP_LEVEL_PROMPT = """You are {display_name}, a {age}-year-old {occupation} from {location}.
-Personality: {personality}. You write online like this: {communication_style}.
+Personality: {personality}. You write online like this: {writing_style}.
 
 You are commenting on this post in r/{community_name}:
 
@@ -24,7 +24,7 @@ occasionally longer.
 Respond with ONLY the comment text. No JSON, no quotes, no preamble."""
 
 REPLY_PROMPT = """You are {display_name}, a {age}-year-old {occupation} from {location}.
-Personality: {personality}. You write online like this: {communication_style}.
+Personality: {personality}. You write online like this: {writing_style}.
 {relationship_section}
 You are replying in a thread about "{post_title}":
 {thread_context}
@@ -237,7 +237,7 @@ def generate_comment_tree(
                 occupation=user.get("occupation") or "professional",
                 location=user.get("location") or "somewhere",
                 personality=", ".join(personality) if personality else "curious",
-                communication_style=user.get("communication_style") or "casual",
+                writing_style=user.get("writing_style") or "casual",
                 community_name=community_name,
                 post_title=post.get("title", ""),
                 post_body=(post.get("body") or "")[:500],
@@ -309,7 +309,7 @@ def generate_comment_tree(
                     occupation=reply_user.get("occupation") or "professional",
                     location=reply_user.get("location") or "somewhere",
                     personality=", ".join(personality) if personality else "curious",
-                    communication_style=reply_user.get("communication_style") or "casual",
+                    writing_style=reply_user.get("writing_style") or "casual",
                     relationship_section=relationship_section,
                     post_title=post.get("title", ""),
                     thread_context=thread_context,
