@@ -170,4 +170,31 @@ router.get('/:name/posts', (req, res) => {
   res.json(response);
 });
 
+router.patch('/:id', (req, res) => {
+  const id = parseInt(req.params.id);
+  if (isNaN(id)) {
+    res.status(400).json({ error: 'Invalid community id' });
+    return;
+  }
+  const { member_count } = req.body as { member_count?: unknown };
+  if (
+    typeof member_count !== 'number' ||
+    !Number.isInteger(member_count) ||
+    member_count < 0 ||
+    member_count > 2_500_000
+  ) {
+    res.status(400).json({ error: 'member_count must be an integer between 0 and 2500000' });
+    return;
+  }
+  const result = db
+    .prepare('UPDATE communities SET member_count = ? WHERE id = ?')
+    .run(member_count, id);
+  if (result.changes === 0) {
+    res.status(404).json({ error: 'Community not found' });
+    return;
+  }
+  const community = db.prepare('SELECT * FROM communities WHERE id = ?').get(id) as Community;
+  res.json(community);
+});
+
 export default router;

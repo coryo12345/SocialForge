@@ -5,6 +5,9 @@ import Navbar from '../components/Navbar';
 import apiClient from '../api/client';
 import { useSession } from '../store/useSession';
 import type { Setting } from 'shared/types';
+import CommunityMemberEditor from '../components/CommunityMemberEditor';
+
+const COMMUNITIES_CATEGORY = 'Communities';
 
 const DEFAULTS: Record<string, string> = {
   posts_per_day_min: '50',
@@ -52,7 +55,7 @@ export default function Settings() {
     staleTime: 10_000,
   });
 
-  const categories = [...new Set(schema.map((s) => s.category))];
+  const categories = [...new Set(schema.map((s) => s.category)), COMMUNITIES_CATEGORY];
   const activeCategory = selectedCategory ?? categories[0] ?? '';
 
   const updateMutation = useMutation({
@@ -155,30 +158,36 @@ export default function Settings() {
           <div className="bg-bg-secondary border border-border rounded-lg overflow-hidden">
             <div className="px-5 py-4 border-b border-border flex items-center justify-between">
               <h2 className="font-bold text-text-primary">{activeCategory}</h2>
-              <button
-                onClick={() => resetMutation.mutate(activeCategory)}
-                disabled={resetMutation.isPending}
-                className="text-xs text-text-secondary hover:text-accent transition-colors disabled:opacity-40"
-              >
-                Reset to defaults
-              </button>
-            </div>
-
-            <div className="divide-y divide-border">
-              {categorySettings.map((setting) => (
-                <SettingField
-                  key={setting.key}
-                  setting={setting}
-                  currentValue={values[setting.key] ?? DEFAULTS[setting.key] ?? ''}
-                  onChange={handleChange}
-                />
-              ))}
-              {categorySettings.length === 0 && (
-                <p className="px-5 py-8 text-sm text-text-secondary text-center">
-                  No settings in this category.
-                </p>
+              {activeCategory !== COMMUNITIES_CATEGORY && (
+                <button
+                  onClick={() => resetMutation.mutate(activeCategory)}
+                  disabled={resetMutation.isPending}
+                  className="text-xs text-text-secondary hover:text-accent transition-colors disabled:opacity-40"
+                >
+                  Reset to defaults
+                </button>
               )}
             </div>
+
+            {activeCategory === COMMUNITIES_CATEGORY ? (
+              <CommunityMemberEditor showToast={showToast} />
+            ) : (
+              <div className="divide-y divide-border">
+                {categorySettings.map((setting) => (
+                  <SettingField
+                    key={setting.key}
+                    setting={setting}
+                    currentValue={values[setting.key] ?? DEFAULTS[setting.key] ?? ''}
+                    onChange={handleChange}
+                  />
+                ))}
+                {categorySettings.length === 0 && (
+                  <p className="px-5 py-8 text-sm text-text-secondary text-center">
+                    No settings in this category.
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         </main>
       </div>
