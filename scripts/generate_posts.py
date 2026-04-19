@@ -8,7 +8,7 @@ import json
 import datetime
 import requests as req
 from config import APP_API_URL, INTERNAL_HEADERS, ollama_generate, extract_json, load_settings
-from random_seed import random_ideation_hints
+from random_seed import random_ideation_hints, random_reddit_voice
 
 
 # ── Stage prompt builders ────────────────────────────────────────────────────
@@ -57,10 +57,14 @@ Do not be generic. Do not summarize. If your premise could apply to anyone, it i
 }}"""
 
 
-def build_outline_prompt(user: dict, community: dict, premise: str) -> str:
+_OUTLINE_BULLET_COUNTS = {"short": "2-3", "medium": "4-5", "long": "6-8"}
+
+
+def build_outline_prompt(user: dict, community: dict, premise: str, length_hint: str) -> str:
     personality = json.loads(user.get("personality") or "[]")
     is_narrative = bool(community.get("is_narrative"))
     community_type = "personal story community" if is_narrative else "discussion community"
+    bullet_count = _OUTLINE_BULLET_COUNTS.get(length_hint, "4-5")
     post_style_section = ""
     if community.get("post_style_prompt"):
         post_style_section = f"\nPosting style for this community:\n{community['post_style_prompt']}\n"
@@ -73,42 +77,72 @@ You are posting in r/{community['name']} ({community_type}).
 Your personality: {', '.join(personality) if personality else 'curious'}.
 Your political lean: {user.get('political_lean') or 'centrist'}.
 {post_style_section}
-Create an ordered outline for this post. List 4-8 bullet points.
-Each bullet must be a specific detail, scene beat, or point to make — not a vague category.
-Write what to actually say, not instructions like "describe the conflict."
+Write {bullet_count} rough draft sentences capturing what this post will actually say.
+These are NOT structural labels like "describe the conflict" — write the actual content.
+Each entry should be a real sentence or two that you will say or describe in the post.
+Think of it as jotting down the main points before writing the full version.
 
 Respond with ONLY a **VALID** JSON object:
 {{
-  "outline": ["bullet 1", "bullet 2", ...]
+  "outline": ["draft sentence 1", "draft sentence 2", ...]
 }}"""
 
 
-def build_writing_prompt(user: dict, community: dict, premise: str, outline: list[str]) -> str:
+_LENGTH_WORD_TARGETS = {"short": "50-150", "medium": "150-350", "long": "400-800"}
+
+
+def build_writing_prompt(user: dict, community: dict, premise: str, outline: list[str],
+                         length_hint: str, opener: str, voice_rules: list[str],
+                         anti_robot: list[str]) -> str:
     personality = json.loads(user.get("personality") or "[]")
     numbered = "\n".join(f"{i+1}. {point}" for i, point in enumerate(outline))
+    word_target = _LENGTH_WORD_TARGETS.get(length_hint, "150-350")
+    voice_block = "\n".join(f"- {r}" for r in voice_rules)
+    anti_block = "\n".join(f"- {r}" for r in anti_robot)
+    post_style_section = ""
+    if community.get("post_style_prompt"):
+        post_style_section = f"\nCOMMUNITY POSTING STYLE — follow this:\n{community['post_style_prompt']}\n"
 
     return f"""You are {user['display_name']}. Write a Reddit post for r/{community['name']}.
 
 YOUR PREMISE: {premise}
 
-YOUR OUTLINE (cover every point, in order):
+YOUR DRAFT POINTS (cover all of these, in order):
 {numbered}
 
 YOUR WRITING STYLE: {user.get('writing_style') or 'conversational, natural Reddit prose'}
 YOUR PERSONALITY: {', '.join(personality) if personality else 'curious'}
+{post_style_section}
+VOICE — follow these:
+{voice_block}
 
-Rules:
-- Write in first person. Be this person, do not describe them.
-- Add specific invented details wherever the outline is sparse (names, dollar amounts, timeframes, locations). Specificity makes posts feel real.
-- Match the writing style exactly — if it says short sentences and line breaks, do that.
-- Do not write a tidy conclusion if the situation is unresolved.
-- Title should hook the reader but not spoil the whole post.
+AVOID:
+{anti_block}
 
-Respond with ONLY a JSON object, you **must** include a title, and the output MUST be **VALID** JSON. Be sure to include commas between properties.
+OPENER: Start your post body with or near this line — adapt it naturally, do not copy verbatim:
+"{opener}"
+
+TARGET LENGTH: {word_target} words for the body. Match this range — don't pad, don't cut short.
+
+Respond with ONLY valid JSON. You MUST include a title. Use commas between all properties.
 {{
   "title": "post title (max 300 chars)",
-  "body": "full post body, or empty string for title-only posts",
-  "flair": "a short flair tag like Discussion / Rant / Question / Story, or null"
+  "body": "full post body",
+  "flair": "Discussion / Rant / Question / Story / etc, or null"
+}}"""
+
+
+def build_title_only_prompt(user: dict, community: dict, premise: str) -> str:
+    return f"""You are {user['display_name']}. Write a Reddit post title for r/{community['name']}.
+
+PREMISE: {premise}
+YOUR WRITING STYLE: {user.get('writing_style') or 'conversational'}
+
+Write a title that hooks the reader. Sound like a real person, not a headline. Max 200 characters.
+
+Respond with ONLY valid JSON:
+{{
+  "title": "the post title"
 }}"""
 
 
@@ -235,7 +269,7 @@ def generate_post_3stage(
     viral_prob: float,
 ) -> dict | None:
     is_narrative = bool(community.get("is_narrative"))
-    format_hint, register_hint, angle_hint = random_ideation_hints(is_narrative)
+    format_hint, length_hint, register_hint, angle_hint = random_ideation_hints(is_narrative)
 
     # Stage 1: Ideation
     ideation_prompt = build_ideation_prompt(
@@ -263,22 +297,52 @@ def generate_post_3stage(
     is_title_only = bool(data1.get("is_title_only", False))
     print(f"    Premise: {premise[:80]}")
 
-    # Stage 2: Outline
-    outline_prompt = build_outline_prompt(user, community, premise)
+    now = int(time.time())
+    score, upvotes, downvotes = random_score(viral_prob)
+
+    # Short-circuit: title-only posts skip outline + full writing
+    if is_title_only:
+        title_prompt = build_title_only_prompt(user, community, premise)
+        raw_t = ollama_generate(title_prompt, model=ollama_model, temperature=temp_writing,
+                                num_predict=150)
+        data_t = extract_json(raw_t)
+        if not data_t or not data_t.get("title"):
+            print(f"    Title-only generation failed")
+            return None
+        return {
+            "community_name": community["name"],
+            "username": user["username"],
+            "title": str(data_t["title"])[:300],
+            "body": "",
+            "post_type": "text",
+            "score": score,
+            "upvote_count": upvotes,
+            "downvote_count": downvotes,
+            "flair": None,
+            "scheduled_at": random_scheduled_at(target_date),
+            "created_at": now,
+            "updated_at": now,
+        }
+
+    # Stage 2: Outline (with dynamic bullet count from length_hint)
+    outline_prompt = build_outline_prompt(user, community, premise, length_hint)
     raw2 = ollama_generate(outline_prompt, model=ollama_model, temperature=temp_outline,
-                           num_predict=400)
+                           num_predict=600)
     data2 = extract_json(raw2)
     if not data2 or not isinstance(data2.get("outline"), list) or len(data2["outline"]) < 2:
         print(f"    Stage 2 failed: no outline")
         return None
 
-    outline = [str(b) for b in data2["outline"][:8]]
+    max_bullets = int(_OUTLINE_BULLET_COUNTS.get(length_hint, "4-5").split("-")[1])
+    outline = [str(b) for b in data2["outline"][:max_bullets]]
 
-    # Stage 3: Writing
-    writing_prompt = build_writing_prompt(user, community, premise, outline)
+    # Stage 3: Writing (with Reddit voice injection)
+    opener, voice_rules, anti_robot = random_reddit_voice()
+    writing_prompt = build_writing_prompt(
+        user, community, premise, outline, length_hint, opener, voice_rules, anti_robot
+    )
     raw3 = ollama_generate(writing_prompt, model=ollama_model, temperature=temp_writing)
     data3 = extract_json(raw3)
-    # one retry
     if not data3:
         print(f"    Stage 3: Not valid JSON, trying again...")
         raw3 = ollama_generate(writing_prompt, model=ollama_model, temperature=temp_writing)
@@ -291,11 +355,7 @@ def generate_post_3stage(
         return None
 
     body = str(data3.get("body") or "")
-    if is_title_only:
-        body = ""
 
-    now = int(time.time())
-    score, upvotes, downvotes = random_score(viral_prob)
     return {
         "community_name": community["name"],
         "username": user["username"],

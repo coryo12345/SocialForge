@@ -55,26 +55,37 @@ USER_CATEGORIES = [
     USER_SEED_WORDS[90:100], # politics
 ]
 
+# Each entry is (format description, length hint: "short" | "medium" | "long")
 POST_FORMATS = [
-    "a rant", "a confession", "a humble-brag", "a request for advice",
-    "a hot take", "an update to a previous situation", "a milestone announcement",
-    "a question they already know the answer to", "venting without wanting advice",
-    "sharing something they found", "a detailed how-to", "a wronged customer complaint",
-    "a long personal story with a mundane conclusion", "defending an unpopular position",
-    "asking if they're the asshole", "celebrating a small personal win",
+    ("a rant", "medium"),
+    ("a confession", "medium"),
+    ("a humble-brag", "short"),
+    ("a request for advice", "medium"),
+    ("a hot take", "short"),
+    ("an update to a previous situation", "medium"),
+    ("a milestone announcement", "short"),
+    ("a question they already know the answer to", "short"),
+    ("venting without wanting advice", "medium"),
+    ("sharing something they found", "short"),
+    ("a detailed how-to", "long"),
+    ("a wronged customer complaint", "medium"),
+    ("a long personal story with a mundane conclusion", "long"),
+    ("defending an unpopular position", "medium"),
+    ("asking if they're the asshole", "long"),
+    ("celebrating a small personal win", "short"),
 ]
 
 NARRATIVE_POST_FORMATS = [
-    "a first-person story with a clear setup, escalating conflict, and satisfying payoff",
-    "a revenge story told chronologically with specific details and a triumphant ending",
-    "a story where you detail exactly what the other person did and precisely how you responded",
-    "a blow-by-blow account of an incident that ended in your favor",
-    "a story that starts with 'so this happened' and escalates into chaos",
-    "a story recounting a situation where you kept your cool and let the consequences unfold",
-    "a confession of something you did in retaliation that you have zero regrets about",
-    "an update post where you describe the original offense and then how you got back at them",
-    "a story told with escalating detail where the ending is proportionally satisfying",
-    "a tale of a workplace, neighbor, or stranger conflict that you won decisively",
+    ("a first-person story with a clear setup, escalating conflict, and satisfying payoff", "long"),
+    ("a revenge story told chronologically with specific details and a triumphant ending", "long"),
+    ("a story where you detail exactly what the other person did and precisely how you responded", "long"),
+    ("a blow-by-blow account of an incident that ended in your favor", "long"),
+    ("a story that starts with 'so this happened' and escalates into chaos", "long"),
+    ("a story recounting a situation where you kept your cool and let the consequences unfold", "long"),
+    ("a confession of something you did in retaliation that you have zero regrets about", "medium"),
+    ("an update post where you describe the original offense and then how you got back at them", "long"),
+    ("a story told with escalating detail where the ending is proportionally satisfying", "long"),
+    ("a tale of a workplace, neighbor, or stranger conflict that you won decisively", "long"),
 ]
 
 EMOTIONAL_REGISTERS = [
@@ -111,6 +122,63 @@ NARRATIVE_POST_ANGLES = [
     "noting that witnesses or bystanders were delighted by what unfolded",
 ]
 
+# Opening lines to seed natural Reddit voice — injected into Stage 3
+REDDIT_OPENERS = [
+    "So this just happened and I'm still processing it.",
+    "I need to vent. Bear with me.",
+    "Long post, sorry in advance.",
+    "I don't even know where to start with this.",
+    "I've been sitting on this for a week and I need to share it.",
+    "Not sure if this is the right place but here goes.",
+    "This is going to sound unbelievable but I swear it's real.",
+    "I'm still kind of shaking as I type this.",
+    "Throwaway because people IRL know my main account.",
+    "Context: this has been building for months.",
+    "I need the internet to tell me I'm not crazy.",
+    "So here's the thing.",
+    "You guys are not going to believe what just happened.",
+    "I've been wanting to post about this for a while.",
+    "Quick background before I get into it.",
+    "This is embarrassing to admit but here we go.",
+    "I told my partner about this and they said I should post it here.",
+    "I feel like I'm taking crazy pills.",
+    "Ok so.",
+    "Genuine question:",
+    "Update on a situation I posted about a while back.",
+    "I've been going back and forth on whether to post this.",
+    "So apparently I'm the bad guy now.",
+    "I don't usually post here but this has been eating at me.",
+    "My coworker thinks I'm wrong about this. Am I?",
+]
+
+# Voice rules randomly sampled and injected into Stage 3
+REDDIT_VOICE_PHRASES = [
+    "Use contractions naturally (I'm, it's, they've, wouldn't). Never write 'I am' when 'I'm' works.",
+    "Use 'tbh', 'ngl', 'idk', 'imo', or 'lol' at least once where it fits naturally.",
+    "Write in short paragraphs. Hit enter between thoughts. No walls of text.",
+    "Sentence fragments are fine. So is starting a sentence with 'And' or 'But'.",
+    "Write how you'd talk to a friend, not how you'd write an email to your boss.",
+    "Trail off at the end if you're still processing — you don't need a neat conclusion.",
+    "Use em-dashes — like this — for asides or mid-thought interruptions.",
+    "Use 'like', 'literally', 'honestly', and 'basically' the way real people do.",
+    "It's okay to repeat yourself slightly for emphasis. People do that when they're wound up.",
+    "If the moment is funny, be funny. If it's infuriating, let that show — don't flatten the emotion.",
+    "Mild swearing is fine if it fits the emotion — 'what the hell', 'honestly screw that', 'are you kidding me'.",
+    "Don't explain your own emotions too clinically. Show them through what you said or did.",
+]
+
+# Anti-patterns to ban — randomly sampled and injected into Stage 3
+ANTI_ROBOT_RULES = [
+    "Do NOT write like a news article or formal essay.",
+    "Do NOT use ## headers or bullet point lists in the post body.",
+    "Do NOT start with 'As a...' or 'In today's world...' or any generic preamble.",
+    "Do NOT write a tidy concluding paragraph that wraps everything up neatly if the situation is still unresolved.",
+    "Do NOT explain what the post is about before diving in. Just start writing.",
+    "Do NOT use the phrase 'I wanted to share' or 'I feel compelled to'.",
+    "Do NOT write in perfect complete sentences if the person is upset — let it be a little messy.",
+    "Do NOT summarize the post at the end. If you've said it, don't say it again.",
+]
+
 
 def random_user_seeds(n=3):
     chosen_categories = random.sample(USER_CATEGORIES, n)
@@ -118,9 +186,17 @@ def random_user_seeds(n=3):
 
 
 def random_ideation_hints(is_narrative=False):
-    """Return (format_hint, register_hint, angle_hint) for Stage 1 ideation."""
+    """Return (format_hint, length_hint, register_hint, angle_hint) for Stage 1 ideation."""
     formats = NARRATIVE_POST_FORMATS if is_narrative else POST_FORMATS
     registers = NARRATIVE_EMOTIONAL_REGISTERS if is_narrative else EMOTIONAL_REGISTERS
     angles = NARRATIVE_POST_ANGLES if is_narrative else POST_ANGLES
-    return random.choice(formats), random.choice(registers), random.choice(angles)
+    format_hint, length_hint = random.choice(formats)
+    return format_hint, length_hint, random.choice(registers), random.choice(angles)
 
+
+def random_reddit_voice():
+    """Return (opener, voice_rules, anti_robot) to inject into Stage 3."""
+    opener = random.choice(REDDIT_OPENERS)
+    voice_rules = random.sample(REDDIT_VOICE_PHRASES, 3)
+    anti_robot = random.sample(ANTI_ROBOT_RULES, 3)
+    return opener, voice_rules, anti_robot
