@@ -6,7 +6,7 @@ import time
 import json
 import datetime
 import requests as req
-from config import APP_API_URL, INTERNAL_HEADERS, ollama_generate, extract_json, load_settings
+from config import APP_API_URL, INTERNAL_HEADERS, llm_generate, extract_json, load_settings, CURRENT_MODEL
 
 TOP_LEVEL_PROMPT = """You are {display_name}, a {age}-year-old {occupation} from {location}.
 Personality: {personality}. You write online like this: {writing_style}.
@@ -143,8 +143,7 @@ def generate_comment_tree(
     max_depth: int,
     max_replies: int,
     multiplier: float,
-    ollama_model: str | None,
-    ollama_temp: float,
+    llm_temp: float,
     use_relationships: bool = True,
 ) -> list:
     """Generate a flat list of comment dicts for a single post."""
@@ -214,6 +213,7 @@ def generate_comment_tree(
             "upvote_count": upvotes,
             "downvote_count": downvotes,
             "depth": depth,
+            "model": CURRENT_MODEL,
             "scheduled_at": post_scheduled + offset,
             "created_at": now,
             "updated_at": now,
@@ -230,7 +230,7 @@ def generate_comment_tree(
             break
 
         personality = json.loads(user.get("personality") or "[]")
-        body_text = ollama_generate(
+        body_text = llm_generate(
             TOP_LEVEL_PROMPT.format(
                 display_name=user["display_name"],
                 age=user.get("age") or "30",
@@ -242,8 +242,7 @@ def generate_comment_tree(
                 post_title=post.get("title", ""),
                 post_body=(post.get("body") or "")[:500],
             ),
-            model=ollama_model,
-            temperature=ollama_temp,
+            temperature=llm_temp,
         )
         if not body_text or len(body_text.strip()) < 5:
             continue
@@ -302,7 +301,7 @@ def generate_comment_tree(
                 thread_context = get_thread_context(parent)
 
             personality = json.loads(reply_user.get("personality") or "[]")
-            body_text = ollama_generate(
+            body_text = llm_generate(
                 REPLY_PROMPT.format(
                     display_name=reply_user["display_name"],
                     age=reply_user.get("age") or "30",
@@ -316,8 +315,7 @@ def generate_comment_tree(
                     parent_author=parent_user.get("display_name", "someone"),
                     parent_body=parent["body"][:300],
                 ),
-                model=ollama_model,
-                temperature=ollama_temp,
+                temperature=llm_temp,
             )
             if not body_text or len(body_text.strip()) < 3:
                 continue
@@ -358,8 +356,7 @@ def main():
     args = parser.parse_args()
 
     settings = load_settings()
-    ollama_model = settings.get("ollama_model") or None
-    ollama_temp = float(settings.get("ollama_temperature", 0.8))
+    llm_temp = float(settings.get("llm_temperature", 0.8))
     max_top_level = args.max_top_level or int(settings.get("max_top_level_comments", 12))
     max_depth = args.max_depth or int(settings.get("max_comment_depth", 4))
     max_replies = args.max_replies or int(settings.get("max_replies_per_comment", 3))
@@ -391,7 +388,7 @@ def main():
     for i, post in enumerate(posts):
         print(f"\n[{i+1}/{len(posts)}] Post {post['id']}: {post.get('title', '')[:60]}")
         comments = generate_comment_tree(
-            post, users, max_top_level, max_depth, max_replies, multiplier, ollama_model, ollama_temp,
+            post, users, max_top_level, max_depth, max_replies, multiplier, llm_temp,
             use_relationships=use_relationships,
         )
         print(f"  Generated {len(comments)} comments")

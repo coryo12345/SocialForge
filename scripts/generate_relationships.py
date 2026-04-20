@@ -6,7 +6,7 @@ import json
 import random
 import time
 import requests as req
-from config import APP_API_URL, INTERNAL_HEADERS, ollama_generate, extract_json, load_settings
+from config import APP_API_URL, INTERNAL_HEADERS, llm_generate, extract_json, load_settings
 
 RELATIONSHIP_PROMPT = """Two internet users have overlapping interests and may interact online.
 
@@ -70,8 +70,7 @@ def main():
     args = parser.parse_args()
 
     settings = load_settings()
-    ollama_model = settings.get("ollama_model") or None
-    ollama_temp = float(settings.get("ollama_temperature", 0.8))
+    llm_temp = float(settings.get("llm_temperature", 0.8))
 
     print("Fetching all AI users...")
     all_users = fetch_all_users()
@@ -131,7 +130,7 @@ def main():
             shared_interests=", ".join(shared[:5]),
         )
 
-        raw = ollama_generate(prompt, model=ollama_model, temperature=ollama_temp)
+        raw = llm_generate(prompt, temperature=llm_temp)
         data = extract_json(raw)
 
         if not data or "type" not in data:

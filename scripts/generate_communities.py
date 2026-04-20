@@ -5,7 +5,7 @@ import json
 import random
 import math
 import requests as req
-from config import APP_API_URL, INTERNAL_HEADERS, ollama_generate, extract_json
+from config import APP_API_URL, INTERNAL_HEADERS, llm_generate, extract_json
 
 COMMUNITY_SEEDS = [
     # News & Information
@@ -86,7 +86,7 @@ def main():
     for seed in COMMUNITY_SEEDS:
         print(f"Generating r/{seed['name']}...", end=" ", flush=True)
         prompt = PROMPT_TEMPLATE.format(**seed)
-        raw = ollama_generate(prompt)
+        raw = llm_generate(prompt)
         data = extract_json(raw)
 
         if not data:

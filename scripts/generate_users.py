@@ -6,7 +6,7 @@ import json
 import random
 import string
 import requests as req
-from config import APP_API_URL, INTERNAL_HEADERS, ollama_generate, extract_json
+from config import APP_API_URL, INTERNAL_HEADERS, llm_generate, extract_json, CURRENT_MODEL
 from random_seed import random_user_seeds
 
 def seeded_prompt_template(user_seed_words):
@@ -44,7 +44,7 @@ def generate_user() -> dict | None:
     for attempt in range(3):
         seeds = random_user_seeds()
         print("Generating with seeds: " + ', '.join(seeds))
-        raw = ollama_generate(seeded_prompt_template(seeds))
+        raw = llm_generate(seeded_prompt_template(seeds))
         data = extract_json(raw)
 
         if not data:
@@ -82,6 +82,7 @@ def generate_user() -> dict | None:
             ),
             "political_lean": data["political_lean"],
             "avatar_seed": secrets.token_hex(4),
+            "model": CURRENT_MODEL,
         }
 
     return None

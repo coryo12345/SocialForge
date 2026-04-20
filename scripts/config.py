@@ -1,13 +1,10 @@
 import os
+import re
 import json
 import requests
 
 # windows loopback (get ip with: `ip route show | grep -i default | awk '{print $3}'`)
-OLLAMA_BASE_URL  = os.getenv("OLLAMA_URL",        "http://172.30.160.1:11434")# "http://localhost:11434")
-
-# normal ollama url
-# OLLAMA_BASE_URL  = os.getenv("OLLAMA_URL",        "http://localhost:11434")
-OLLAMA_MODEL     = os.getenv("OLLAMA_MODEL",      "qwen2.5:3b")#"gemma4:e2b")
+LLAMA_URL        = os.getenv("LLAMA_URL",         "http://172.30.160.1:8080")
 APP_API_URL      = os.getenv("APP_API_URL",       "http://localhost:3001/api")
 INTERNAL_API_KEY = os.getenv("INTERNAL_API_KEY",  "dev-internal-key")
 
@@ -32,29 +29,45 @@ def load_settings() -> dict:
     return {}
 
 
-def ollama_generate(prompt: str, max_retries: int = 3, model: str | None = None,
-                    temperature: float | None = None, num_predict: int | None = None) -> str | None:
-    """Call Ollama generate endpoint. Returns the response text or None on failure."""
-    _model = model or OLLAMA_MODEL
-    _opts: dict = {}
+def detect_model() -> str | None:
+    """Query llama-server /props to get the filename of the currently loaded model."""
+    try:
+        resp = requests.get(f"{LLAMA_URL}/props", timeout=5)
+        if resp.ok:
+            path = resp.json().get("model_path", "")
+            name = re.split(r"[/\\]", path)[-1]
+            stem = os.path.splitext(name)[0]
+            return stem or None
+    except Exception:
+        pass
+    return None
+
+
+CURRENT_MODEL: str | None = detect_model()
+
+
+def llm_generate(prompt: str, max_retries: int = 3,
+                 temperature: float | None = None, n_predict: int | None = None) -> str | None:
+    """Call llama-server /v1/chat/completions endpoint. Returns the response text or None on failure."""
+    payload: dict = {
+        "messages": [{"role": "user", "content": prompt}],
+        "stream": False,
+    }
     if temperature is not None:
-        _opts["temperature"] = temperature
-    if num_predict is not None:
-        _opts["num_predict"] = num_predict
+        payload["temperature"] = temperature
+    if n_predict is not None:
+        payload["max_tokens"] = n_predict
     for attempt in range(max_retries):
         try:
-            payload: dict = {"model": _model, "prompt": prompt, "stream": False}
-            if _opts:
-                payload["options"] = _opts
             resp = requests.post(
-                f"{OLLAMA_BASE_URL}/api/generate",
+                f"{LLAMA_URL}/v1/chat/completions",
                 json=payload,
                 timeout=120,
             )
             resp.raise_for_status()
-            return resp.json()["response"].strip()
+            return resp.json()["choices"][0]["message"]["content"].strip()
         except Exception as e:
-            print(f"  Ollama error (attempt {attempt + 1}): {e}")
+            print(f"  llama-server error (attempt {attempt + 1}): {e}")
     return None
 
 

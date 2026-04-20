@@ -16,6 +16,15 @@ export const up: Migration = async ({ context: { db } }) => {
     'Display',
     'boolean',
   );
+
+  // Remove ollama_model (no longer meaningful with llama.cpp — model is a server-startup concern)
+  db.prepare(`DELETE FROM settings WHERE key = 'ollama_model'`).run();
+
+  // Rename ollama_temperature → llm_temperature
+  db.prepare(
+    `UPDATE settings SET key = 'llm_temperature', label = 'LLM temperature', description = 'Sampling temperature for generation (0.0–2.0)'
+     WHERE key = 'ollama_temperature'`,
+  ).run();
 };
 
 export const down: Migration = async (_params) => {

@@ -4,7 +4,7 @@ import argparse
 import json
 import time
 import requests as req
-from config import APP_API_URL, INTERNAL_HEADERS, ollama_generate, extract_json, load_settings
+from config import APP_API_URL, INTERNAL_HEADERS, llm_generate, extract_json, load_settings
 
 MEMORY_PROMPT = """Analyze this user's recent online activity and extract a behavioral memory summary.
 
@@ -134,8 +134,7 @@ def process_user(user: dict, settings: dict, incremental: bool, lookback_days: i
         print(f"  Skipping {username} (no content)")
         return 0
 
-    ollama_model = settings.get("ollama_model") or None
-    ollama_temp = float(settings.get("ollama_temperature", 0.8))
+    llm_temp = float(settings.get("llm_temperature", 0.8))
 
     prompt = MEMORY_PROMPT.format(
         username=username,
@@ -143,7 +142,7 @@ def process_user(user: dict, settings: dict, incremental: bool, lookback_days: i
         comments_text=format_comments(comments),
     )
 
-    raw = ollama_generate(prompt, model=ollama_model, temperature=ollama_temp)
+    raw = llm_generate(prompt, temperature=llm_temp)
     data = extract_json(raw)
 
     if not data:

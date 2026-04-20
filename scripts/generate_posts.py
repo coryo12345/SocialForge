@@ -7,7 +7,7 @@ import time
 import json
 import datetime
 import requests as req
-from config import APP_API_URL, INTERNAL_HEADERS, ollama_generate, extract_json, load_settings
+from config import APP_API_URL, INTERNAL_HEADERS, llm_generate, extract_json, load_settings, CURRENT_MODEL
 from random_seed import random_ideation_hints, random_reddit_voice
 
 
@@ -262,7 +262,6 @@ def generate_post_3stage(
     community: dict,
     recent_titles: list[str],
     target_date: datetime.date,
-    ollama_model: str | None,
     temp_ideation: float,
     temp_outline: float,
     temp_writing: float,
@@ -275,8 +274,7 @@ def generate_post_3stage(
     ideation_prompt = build_ideation_prompt(
         user, community, recent_titles, format_hint, register_hint, angle_hint
     )
-    raw1 = ollama_generate(ideation_prompt, model=ollama_model, temperature=temp_ideation,
-                           num_predict=200)
+    raw1 = llm_generate(ideation_prompt, temperature=temp_ideation, n_predict=2048)
     data1 = extract_json(raw1)
     if not data1 or not data1.get("premise"):
         print(f"    Stage 1 failed: no premise")
@@ -285,8 +283,7 @@ def generate_post_3stage(
     premise = str(data1["premise"]).strip()
     if not is_valid_premise(premise):
         # One retry
-        raw1b = ollama_generate(ideation_prompt, model=ollama_model, temperature=temp_ideation,
-                                num_predict=200)
+        raw1b = llm_generate(ideation_prompt, temperature=temp_ideation, n_predict=2048)
         data1b = extract_json(raw1b)
         if data1b and data1b.get("premise"):
             premise = str(data1b["premise"]).strip()
@@ -303,8 +300,7 @@ def generate_post_3stage(
     # Short-circuit: title-only posts skip outline + full writing
     if is_title_only:
         title_prompt = build_title_only_prompt(user, community, premise)
-        raw_t = ollama_generate(title_prompt, model=ollama_model, temperature=temp_writing,
-                                num_predict=150)
+        raw_t = llm_generate(title_prompt, temperature=temp_writing, n_predict=1024)
         data_t = extract_json(raw_t)
         if not data_t or not data_t.get("title"):
             print(f"    Title-only generation failed")
@@ -319,6 +315,7 @@ def generate_post_3stage(
             "upvote_count": upvotes,
             "downvote_count": downvotes,
             "flair": None,
+            "model": CURRENT_MODEL,
             "scheduled_at": random_scheduled_at(target_date),
             "created_at": now,
             "updated_at": now,
@@ -326,8 +323,7 @@ def generate_post_3stage(
 
     # Stage 2: Outline (with dynamic bullet count from length_hint)
     outline_prompt = build_outline_prompt(user, community, premise, length_hint)
-    raw2 = ollama_generate(outline_prompt, model=ollama_model, temperature=temp_outline,
-                           num_predict=600)
+    raw2 = llm_generate(outline_prompt, temperature=temp_outline, n_predict=2048)
     data2 = extract_json(raw2)
     if not data2 or not isinstance(data2.get("outline"), list) or len(data2["outline"]) < 2:
         print(f"    Stage 2 failed: no outline")
@@ -341,11 +337,11 @@ def generate_post_3stage(
     writing_prompt = build_writing_prompt(
         user, community, premise, outline, length_hint, opener, voice_rules, anti_robot
     )
-    raw3 = ollama_generate(writing_prompt, model=ollama_model, temperature=temp_writing)
+    raw3 = llm_generate(writing_prompt, temperature=temp_writing)
     data3 = extract_json(raw3)
     if not data3:
         print(f"    Stage 3: Not valid JSON, trying again...")
-        raw3 = ollama_generate(writing_prompt, model=ollama_model, temperature=temp_writing)
+        raw3 = llm_generate(writing_prompt, temperature=temp_writing)
         data3 = extract_json(raw3)
     if not data3:
         print(f"    Stage 3 failed: invalid JSON")
@@ -366,6 +362,7 @@ def generate_post_3stage(
         "upvote_count": upvotes,
         "downvote_count": downvotes,
         "flair": data3.get("flair"),
+        "model": CURRENT_MODEL,
         "scheduled_at": random_scheduled_at(target_date),
         "created_at": now,
         "updated_at": now,
@@ -382,7 +379,6 @@ def main():
     args = parser.parse_args()
 
     settings = load_settings()
-    ollama_model = settings.get("ollama_model") or None
     viral_prob = float(settings.get("viral_post_probability", 0.05))
 
     temp_ideation = float(settings.get("post_ideation_temperature", 0.9))
@@ -439,7 +435,6 @@ def main():
                 community=community,
                 recent_titles=recent_titles,
                 target_date=target_date,
-                ollama_model=ollama_model,
                 temp_ideation=temp_ideation,
                 temp_outline=temp_outline,
                 temp_writing=temp_writing,
