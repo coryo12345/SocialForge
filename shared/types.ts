@@ -12,6 +12,7 @@ export interface User {
   occupation: string | null;
   personality: string | null;        // JSON-encoded string[] on server; parsed array in client
   writing_style: string | null;
+  model: string | null;
   interests: string | null;          // JSON-encoded string[] on server; parsed array in client
   political_lean: string | null;
   is_real_user: 0 | 1;
@@ -74,6 +75,7 @@ export interface Post {
   media_width: number | null;
   media_height: number | null;
   media_duration_seconds: number | null;
+  model: string | null;
 }
 
 export interface FeedPost extends Post {
@@ -100,6 +102,7 @@ export interface Comment {
   scheduled_at: number;
   created_at: number;
   updated_at: number;
+  model: string | null;
 }
 
 export interface CommentWithAuthor extends Comment {

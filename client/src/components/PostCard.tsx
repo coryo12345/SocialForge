@@ -2,9 +2,11 @@ import { Link, useNavigate } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import VoteButton from './VoteButton';
+import Tooltip from './Tooltip';
 import apiClient from '../api/client';
 import { useSession } from '../store/useSession';
 import { useActivityTracker } from '../hooks/useActivityTracker';
+import { useSettings } from '../hooks/useSettings';
 import type { FeedPost, VoteValue } from 'shared/types';
 
 interface PostCardProps {
@@ -18,6 +20,8 @@ export default function PostCard({ post, showCommunity = true, currentVote = 0 }
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { track } = useActivityTracker();
+  const { data: settings } = useSettings();
+  const showModelLabel = settings?.show_model_label === 'true';
 
   const voteMutation = useMutation({
     mutationFn: (value: VoteValue) =>
@@ -116,6 +120,16 @@ export default function PostCard({ post, showCommunity = true, currentVote = 0 }
             </span>
             <span>&middot;</span>
             <span>{timeAgo}</span>
+            {showModelLabel && post.model && (
+              <>
+                <span>&middot;</span>
+                <Tooltip content={post.model}>
+                  <span className="inline-flex items-center opacity-60 hover:opacity-100 transition-opacity cursor-default">
+                    <ModelIcon />
+                  </span>
+                </Tooltip>
+              </>
+            )}
           </div>
 
           {/* Title */}
@@ -218,6 +232,16 @@ function VideoIcon() {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5">
       <polygon points="23 7 16 12 23 17 23 7" />
       <rect x="1" y="5" width="15" height="14" rx="2" />
+    </svg>
+  );
+}
+
+function ModelIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3 h-3">
+      <rect x="2" y="3" width="20" height="14" rx="2" />
+      <path d="M8 21h8M12 17v4" />
+      <path d="M7 8h.01M12 8h.01M17 8h.01M7 12h10" />
     </svg>
   );
 }

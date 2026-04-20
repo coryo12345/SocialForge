@@ -5,6 +5,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../api/client';
 import { useSession } from '../store/useSession';
 import MarkdownBody from './MarkdownBody';
+import Tooltip from './Tooltip';
+import { useSettings } from '../hooks/useSettings';
 import type { CommentWithAuthor, CommentSortOption, VoteValue } from 'shared/types';
 
 interface CommentNode extends CommentWithAuthor {
@@ -124,6 +126,8 @@ function CommentNodeView({
   const [replying, setReplying] = useState(false);
   const { user } = useSession();
   const queryClient = useQueryClient();
+  const { data: settings } = useSettings();
+  const showModelLabel = settings?.show_model_label === 'true';
 
   const voteMutation = useMutation({
     mutationFn: (value: VoteValue) =>
@@ -188,6 +192,13 @@ function CommentNodeView({
             </Link>
             <span className="font-mono text-xs text-text-secondary">{node.score}</span>
             <span className="text-xs text-text-secondary">&middot; {timeAgo}</span>
+            {showModelLabel && node.model && (
+              <Tooltip content={node.model} position="bottom">
+                <span className="inline-flex items-center text-text-secondary opacity-50 hover:opacity-100 transition-opacity cursor-default">
+                  <ModelIcon />
+                </span>
+              </Tooltip>
+            )}
             {collapsed && (
               <button
                 onClick={() => setCollapsed(false)}
@@ -298,6 +309,16 @@ function CommentBox({
         </button>
       </div>
     </div>
+  );
+}
+
+function ModelIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3 h-3">
+      <rect x="2" y="3" width="20" height="14" rx="2" />
+      <path d="M8 21h8M12 17v4" />
+      <path d="M7 8h.01M12 8h.01M17 8h.01M7 12h10" />
+    </svg>
   );
 }
 

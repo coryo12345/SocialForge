@@ -15,18 +15,18 @@ router.post('/users/bulk', (req, res) => {
   const insert = db.prepare(
     `INSERT OR IGNORE INTO users
        (username, display_name, avatar_seed, bio, age, location, occupation,
-        personality, writing_style, interests, political_lean,
+        personality, writing_style, interests, political_lean, model,
         is_real_user, karma, created_at)
      VALUES
        (@username, @display_name, @avatar_seed, @bio, @age, @location, @occupation,
-        @personality, @writing_style, @interests, @political_lean,
+        @personality, @writing_style, @interests, @political_lean, @model,
         0, 0, @created_at)`,
   );
 
   const userDefaults = {
     bio: null, age: null, location: null, occupation: null,
     personality: null, writing_style: null,
-    interests: null, political_lean: null,
+    interests: null, political_lean: null, model: null,
   };
 
   const bulkInsert = db.transaction((rows: Record<string, unknown>[]) => {
@@ -92,6 +92,7 @@ router.post('/posts/bulk', (req, res) => {
       upvote_count?: number;
       downvote_count?: number;
       flair?: string | null;
+      model?: string | null;
       scheduled_at: number;
       created_at: number;
       updated_at: number;
@@ -108,11 +109,11 @@ router.post('/posts/bulk', (req, res) => {
   const insert = db.prepare(
     `INSERT INTO posts
        (community_id, user_id, title, body, post_type, link_url,
-        score, upvote_count, downvote_count, flair,
+        score, upvote_count, downvote_count, flair, model,
         scheduled_at, created_at, updated_at)
      VALUES
        (@community_id, @user_id, @title, @body, @post_type, @link_url,
-        @score, @upvote_count, @downvote_count, @flair,
+        @score, @upvote_count, @downvote_count, @flair, @model,
         @scheduled_at, @created_at, @updated_at)`,
   );
 
@@ -145,6 +146,7 @@ router.post('/posts/bulk', (req, res) => {
           upvote_count,
           downvote_count,
           flair: row.flair ?? null,
+          model: row.model ?? null,
           scheduled_at: row.scheduled_at,
           created_at: row.created_at,
           updated_at: row.updated_at,
@@ -173,6 +175,7 @@ router.post('/comments/bulk', (req, res) => {
       upvote_count?: number;
       downvote_count?: number;
       depth?: number;
+      model?: string | null;
       scheduled_at: number;
       created_at: number;
       updated_at: number;
@@ -188,10 +191,10 @@ router.post('/comments/bulk', (req, res) => {
   const insert = db.prepare(
     `INSERT INTO comments
        (post_id, parent_id, user_id, body, score, upvote_count, downvote_count,
-        depth, scheduled_at, created_at, updated_at)
+        depth, model, scheduled_at, created_at, updated_at)
      VALUES
        (@post_id, @parent_id, @user_id, @body, @score, @upvote_count, @downvote_count,
-        @depth, @scheduled_at, @created_at, @updated_at)`,
+        @depth, @model, @scheduled_at, @created_at, @updated_at)`,
   );
   const updatePostCount = db.prepare(
     'UPDATE posts SET comment_count = comment_count + ? WHERE id = ?',
@@ -225,6 +228,7 @@ router.post('/comments/bulk', (req, res) => {
         upvote_count: row.upvote_count ?? score,
         downvote_count: row.downvote_count ?? 0,
         depth: row.depth ?? 0,
+        model: row.model ?? null,
         scheduled_at: row.scheduled_at,
         created_at: row.created_at,
         updated_at: row.updated_at,

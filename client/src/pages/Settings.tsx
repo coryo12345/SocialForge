@@ -28,6 +28,7 @@ const DEFAULTS: Record<string, string> = {
   default_post_sort: 'hot',
   posts_per_page: '25',
   show_user_karma: 'true',
+  show_model_label: 'false',
 };
 
 export default function Settings() {
