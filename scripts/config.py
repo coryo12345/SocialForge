@@ -47,25 +47,45 @@ CURRENT_MODEL: str | None = detect_model()
 
 
 def llm_generate(prompt: str, max_retries: int = 3,
-                 temperature: float | None = None, n_predict: int | None = None) -> str | None:
-    """Call llama-server /v1/chat/completions endpoint. Returns the response text or None on failure."""
+                 temperature: float | None = None, 
+                 n_predict: int | None = None,
+                 think_budget: int | None = None,
+                 enable_thinking: bool = False) -> str | None:
+    
     payload: dict = {
         "messages": [{"role": "user", "content": prompt}],
         "stream": False,
+        "reasoning_budget_message": "Thinking budget exceeded, please provide the final answer now.",
+        # Setting this to False prevents the template from adding <think> tags
+        "chat_template_kwargs": {"enable_thinking": enable_thinking}
     }
+
+    # Add reasoning budget if specified (0 = disable, >0 = limit)
+    if think_budget is not None:
+        payload["reasoning_budget"] = think_budget
+
     if temperature is not None:
         payload["temperature"] = temperature
+    
     if n_predict is not None:
         payload["max_tokens"] = n_predict
+
     for attempt in range(max_retries):
         try:
             resp = requests.post(
                 f"{LLAMA_URL}/v1/chat/completions",
                 json=payload,
-                timeout=120,
+                timeout=120, # Increase this if your hardware is very slow!
             )
+            # print(json.dumps(resp.json())) 
             resp.raise_for_status()
-            return resp.json()["choices"][0]["message"]["content"].strip()
+            data = resp.json()
+            
+            # Note: Some models return reasoning in a separate "reasoning_content" field
+            message = data["choices"][0]["message"]
+            content = message.get("content", "")
+            
+            return content.strip()
         except Exception as e:
             print(f"  llama-server error (attempt {attempt + 1}): {e}")
     return None

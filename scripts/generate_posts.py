@@ -274,7 +274,7 @@ def generate_post_3stage(
     ideation_prompt = build_ideation_prompt(
         user, community, recent_titles, format_hint, register_hint, angle_hint
     )
-    raw1 = llm_generate(ideation_prompt, temperature=temp_ideation, n_predict=2048)
+    raw1 = llm_generate(ideation_prompt, temperature=temp_ideation)
     data1 = extract_json(raw1)
     if not data1 or not data1.get("premise"):
         print(f"    Stage 1 failed: no premise")
@@ -283,7 +283,7 @@ def generate_post_3stage(
     premise = str(data1["premise"]).strip()
     if not is_valid_premise(premise):
         # One retry
-        raw1b = llm_generate(ideation_prompt, temperature=temp_ideation, n_predict=2048)
+        raw1b = llm_generate(ideation_prompt, temperature=temp_ideation)
         data1b = extract_json(raw1b)
         if data1b and data1b.get("premise"):
             premise = str(data1b["premise"]).strip()
@@ -323,7 +323,7 @@ def generate_post_3stage(
 
     # Stage 2: Outline (with dynamic bullet count from length_hint)
     outline_prompt = build_outline_prompt(user, community, premise, length_hint)
-    raw2 = llm_generate(outline_prompt, temperature=temp_outline, n_predict=2048)
+    raw2 = llm_generate(outline_prompt, temperature=temp_outline)
     data2 = extract_json(raw2)
     if not data2 or not isinstance(data2.get("outline"), list) or len(data2["outline"]) < 2:
         print(f"    Stage 2 failed: no outline")
