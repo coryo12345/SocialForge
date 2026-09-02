@@ -5,6 +5,7 @@ import itertools
 import json
 import random
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests as req
 from config import APP_API_URL, INTERNAL_HEADERS, llm_generate, extract_json, load_settings
 
@@ -67,7 +68,10 @@ def main():
     parser.add_argument("--max-pairs", type=int, default=2000, help="Max relationship pairs to generate")
     parser.add_argument("--similarity-threshold", type=float, default=0.25, help="Minimum Jaccard similarity to consider")
     parser.add_argument("--dry-run", action="store_true", help="Preview without inserting")
+    parser.add_argument("--parallel", type=int, default=1,
+                        help="Number of pairs to generate concurrently (default: 1)")
     args = parser.parse_args()
+    args.parallel = max(1, args.parallel)
 
     settings = load_settings()
     llm_temp = float(settings.get("llm_temperature", 0.8))
@@ -108,14 +112,8 @@ def main():
             print(f"  {a['display_name']} <-> {b['display_name']} | sim={sim:.2f} | shared={shared[:3]}")
         return
 
-    batch = []
-    total_inserted = 0
-    succeeded = 0
-    failed = 0
-
-    for i, (a, b, sim, shared) in enumerate(candidates):
-        print(f"[{i+1}/{len(candidates)}] {a['display_name']} <-> {b['display_name']} (sim={sim:.2f})")
-
+    def generate_pair(pair) -> dict | None:
+        a, b, sim, shared = pair
         prompt = RELATIONSHIP_PROMPT.format(
             name_a=a["display_name"],
             age_a=a.get("age") or "adult",
@@ -135,8 +133,7 @@ def main():
 
         if not data or "type" not in data:
             print(f"  FAILED to parse relationship for {a['display_name']} <-> {b['display_name']}")
-            failed += 1
-            continue
+            return None
 
         rel_type = data.get("type", "acquaintance")
         if rel_type not in ("ally", "rival", "acquaintance", "fan"):
@@ -145,20 +142,39 @@ def main():
         strength = min(1.0, max(0.1, float(data.get("strength", 0.5))))
         notes = str(data.get("notes", ""))[:500]
 
-        batch.append({
+        return {
             "user_id_a": a["id"],
             "user_id_b": b["id"],
             "relationship_type": rel_type,
             "strength": strength,
             "notes": notes,
-        })
-        succeeded += 1
-        print(f"  → {rel_type} (strength={strength:.2f}): {notes[:80]}")
+        }
 
-        if len(batch) >= 20:
-            total_inserted += flush_relationships(batch)
-            batch.clear()
-            time.sleep(0.1)
+    batch = []
+    total_inserted = 0
+    succeeded = 0
+    failed = 0
+
+    with ThreadPoolExecutor(max_workers=args.parallel) as pool:
+        futures = [pool.submit(generate_pair, p) for p in candidates]
+        for future in as_completed(futures):
+            try:
+                rel = future.result()
+            except Exception as e:
+                rel = None
+                print(f"  Unexpected error: {e}")
+            if not rel:
+                failed += 1
+                continue
+
+            batch.append(rel)
+            succeeded += 1
+            print(f"  [{succeeded + failed}/{len(candidates)}] → {rel['relationship_type']} (strength={rel['strength']:.2f}): {rel['notes'][:80]}")
+
+            if len(batch) >= 20:
+                total_inserted += flush_relationships(batch)
+                batch.clear()
+                time.sleep(0.1)
 
     total_inserted += flush_relationships(batch)
     print(f"\nDone. {succeeded} generated, {total_inserted} inserted, {failed} failed")

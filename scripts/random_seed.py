@@ -180,6 +180,60 @@ ANTI_ROBOT_RULES = [
 ]
 
 
+# Short passages showing the *texture* of real Reddit prose. One is sampled and
+# shown to the model in the writing stage as a register sample — this teaches
+# voice far better than a list of things not to do, which a large model will
+# follow so literally that the compliance itself becomes the tell.
+REDDIT_EXCERPTS = [
+    """I'm not even mad about the money at this point. It's the 40 minutes on hold. Forty minutes, three transfers, and the last guy asked me to repeat the account number I'd already given twice. Then the call dropped.
+
+Called back. Different department. "We don't handle that here."
+
+I know it's like $18. I know. But it's the principle now and I have nothing but time.""",
+
+    """ok so context, my sister has been "between apartments" since March. she is on my couch. it is September.
+
+she pays for groceries sometimes which she brings up constantly like it's rent. last week she asked if I could "give her some space" in my own living room because she was on a work call.
+
+my mom says I'm being uncharitable. maybe? idk. I just want my couch.""",
+
+    """Bought the house in 2019 knowing the roof had maybe 5 years left. Classic me, figured I'd deal with it later.
+
+Later is now, obviously. Got three quotes: 14k, 17k, and one guy who looked at it for four minutes and said 9k which immediately made me trust him less, not more.
+
+Anyone know if the 9k guy is a red flag or if the other two are just seeing a nice driveway and a Volvo? Genuinely asking. I have no instinct for this.""",
+
+    """He said it in front of everyone. At the table. "She's always been the less ambitious one."
+
+I didn't say anything. Just kept eating. My aunt changed the subject to the weather like she'd been waiting for a reason to.
+
+That was three weeks ago and I've replayed it probably two hundred times, and in every version I say something devastating, and in real life I said nothing and passed the potatoes.""",
+
+    """Update because a few people asked.
+
+So the short version is she did text back. Long version is she texted back nine days later with "hey sorry been swamped!!" which, sure. Swamped. For nine days.
+
+We're getting coffee Thursday. I don't know what I want out of it. I don't think I want to date her anymore, I think I just want to know what happened, which is probably its own kind of pathetic.""",
+
+    """Nobody tells you the actual hard part of night shift is grocery stores.
+
+Like yes the sleep thing is bad, everyone warns you about the sleep thing. But you finish at 7am wired and starving and the only thing open is the same gas station, and by the time you wake up at 4pm you have two hours before everything decent closes and you're too tired to cook anyway.
+
+Been doing this eleven months. I eat a lot of rotisserie chicken.""",
+
+    """genuinely think my dog knows when I'm about to leave before I do. like before I've decided.
+
+I'll be sitting there and he'll get up and go sit by the door and THEN I'll think "huh I should probably run to the store." every time. every single time.
+
+either he's reading some micro-tell I don't know I have or he's psychic and I'm honestly fine with either""",
+
+    """I want to be clear that I was not the reasonable one here.
+
+The guy cut the line. That part is objectively true, four people behind me saw it. But a normal person says "hey, there's a line" and I said something much worse and much louder, and then his kid started crying, and I got to be the guy who made a kid cry over a deli counter.
+
+Still think he cut the line. Also still think about it at 2am.""",
+]
+
 def random_user_seeds(n=3):
     chosen_categories = random.sample(USER_CATEGORIES, n)
     return [random.choice(cat) for cat in chosen_categories]
@@ -200,3 +254,8 @@ def random_reddit_voice():
     voice_rules = random.sample(REDDIT_VOICE_PHRASES, 3)
     anti_robot = random.sample(ANTI_ROBOT_RULES, 3)
     return opener, voice_rules, anti_robot
+
+
+def random_reddit_excerpt():
+    """Return one short passage illustrating real Reddit prose texture."""
+    return random.choice(REDDIT_EXCERPTS)

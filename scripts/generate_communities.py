@@ -1,9 +1,11 @@
 """Generate subreddit-equivalent communities via LLM and insert them into the database."""
 
+import argparse
 import secrets
 import json
 import random
 import math
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests as req
 from config import APP_API_URL, INTERNAL_HEADERS, llm_generate, extract_json
 
@@ -81,38 +83,57 @@ def lognormal_member_count() -> int:
     return max(1_000, min(2_500_000, raw))
 
 
+def build_community(seed: dict) -> dict:
+    prompt = PROMPT_TEMPLATE.format(**seed)
+    raw = llm_generate(prompt)
+    data = extract_json(raw)
+
+    if not data:
+        print(f"  r/{seed['name']}: LLM failed (using defaults)")
+        data = {
+            "display_name": seed["name"],
+            "description": seed["topic"][:200],
+            "sidebar_text": seed["topic"][:200],
+            "rules": ["Be respectful", "Stay on topic", "No spam"],
+            "tags": [],
+        }
+
+    return {
+        "name": seed["name"],
+        "display_name": str(data.get("display_name", seed["name"]))[:50],
+        "description": str(data.get("description", "")),
+        "sidebar_text": str(data.get("sidebar_text", "")),
+        "rules": json.dumps(data.get("rules", [])),
+        "tags": json.dumps(data.get("tags", [])),
+        "icon_seed": secrets.token_hex(4),
+        "banner_color": "#c4730a",
+        "member_count": lognormal_member_count(),
+        "post_style_prompt": seed.get("post_style_prompt"),
+        "is_narrative": 1 if seed.get("is_narrative") else 0,
+    }
+
+
 def main():
-    communities = []
-    for seed in COMMUNITY_SEEDS:
-        print(f"Generating r/{seed['name']}...", end=" ", flush=True)
-        prompt = PROMPT_TEMPLATE.format(**seed)
-        raw = llm_generate(prompt)
-        data = extract_json(raw)
+    parser = argparse.ArgumentParser(description="Generate AI communities from seeds")
+    parser.add_argument("--parallel", type=int, default=1,
+                        help="Number of communities to generate concurrently (default: 1)")
+    args = parser.parse_args()
+    args.parallel = max(1, args.parallel)
 
-        if not data:
-            print("FAILED (using defaults)")
-            data = {
-                "display_name": seed["name"],
-                "description": seed["topic"][:200],
-                "sidebar_text": seed["topic"][:200],
-                "rules": ["Be respectful", "Stay on topic", "No spam"],
-                "tags": [],
-            }
+    results: list[tuple[int, dict]] = []
+    with ThreadPoolExecutor(max_workers=args.parallel) as pool:
+        futures = {pool.submit(build_community, seed): i for i, seed in enumerate(COMMUNITY_SEEDS)}
+        for i, future in enumerate(as_completed(futures), start=1):
+            seed_idx = futures[future]
+            try:
+                community = future.result()
+            except Exception as e:
+                print(f"  [{i}/{len(COMMUNITY_SEEDS)}] r/{COMMUNITY_SEEDS[seed_idx]['name']} error: {e}")
+                continue
+            results.append((seed_idx, community))
+            print(f"[{i}/{len(COMMUNITY_SEEDS)}] r/{community['name']} ok")
 
-        communities.append({
-            "name": seed["name"],
-            "display_name": str(data.get("display_name", seed["name"]))[:50],
-            "description": str(data.get("description", "")),
-            "sidebar_text": str(data.get("sidebar_text", "")),
-            "rules": json.dumps(data.get("rules", [])),
-            "tags": json.dumps(data.get("tags", [])),
-            "icon_seed": secrets.token_hex(4),
-            "banner_color": "#c4730a",
-            "member_count": lognormal_member_count(),
-            "post_style_prompt": seed.get("post_style_prompt"),
-            "is_narrative": 1 if seed.get("is_narrative") else 0,
-        })
-        print("ok")
+    communities = [c for _, c in sorted(results)]
 
     print(f"\nInserting {len(communities)} communities...", end=" ", flush=True)
     resp = req.post(

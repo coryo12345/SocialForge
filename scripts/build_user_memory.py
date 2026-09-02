@@ -2,7 +2,7 @@
 
 import argparse
 import json
-import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests as req
 from config import APP_API_URL, INTERNAL_HEADERS, llm_generate, extract_json, load_settings
 
@@ -188,7 +188,10 @@ def main():
     parser.add_argument("--user-id", type=int, default=None, help="Process specific user by ID")
     parser.add_argument("--incremental", action="store_true", help="Skip users with recent memory (within --lookback-days)")
     parser.add_argument("--lookback-days", type=int, default=7, help="Skip users with memory updated within this many days (--incremental)")
+    parser.add_argument("--parallel", type=int, default=1,
+                        help="Number of users to process concurrently (default: 1)")
     args = parser.parse_args()
+    args.parallel = max(1, args.parallel)
 
     if not args.all_users and args.user_id is None:
         print("Specify --all-users or --user-id X")
@@ -218,10 +221,16 @@ def main():
         print(f"Found {len(users)} users")
 
     total = 0
-    for i, user in enumerate(users):
-        print(f"[{i+1}/{len(users)}] {user['display_name']} (@{user['username']})")
-        total += process_user(user, settings, args.incremental, args.lookback_days)
-        time.sleep(0.05)
+    with ThreadPoolExecutor(max_workers=args.parallel) as pool:
+        futures = [
+            pool.submit(process_user, user, settings, args.incremental, args.lookback_days)
+            for user in users
+        ]
+        for future in as_completed(futures):
+            try:
+                total += future.result()
+            except Exception as e:
+                print(f"  Unexpected error: {e}")
 
     print(f"\nDone. Total memory rows upserted: {total}")
 

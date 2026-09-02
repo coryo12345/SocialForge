@@ -30,21 +30,29 @@ def main():
                         help="Run build_user_memory.py after comments (Phase 3: update user memory)")
     parser.add_argument("--no-abort-on-failure", action="store_true",
                         help="Continue even if a step fails")
+    parser.add_argument("--parallel", type=int, default=1,
+                        help="Concurrent LLM requests within each stage (default: 1)")
     args = parser.parse_args()
+    args.parallel = max(1, args.parallel)
 
-    post_cmd = [sys.executable, "generate_posts.py", "--date", args.date]
+    post_cmd = [sys.executable, "generate_posts.py", "--date", args.date,
+                "--parallel", str(args.parallel)]
     if args.count is not None:
         post_cmd += ["--count", str(args.count)]
     if args.community:
         post_cmd += ["--community", args.community]
 
-    comment_cmd = [sys.executable, "generate_comments.py", "--date", args.date]
+    comment_cmd = [sys.executable, "generate_comments.py", "--date", args.date,
+                   "--parallel", str(args.parallel)]
     if args.community:
         comment_cmd += ["--community", args.community]
 
     # Step 0 (optional): sync relationship graph
     if args.sync_relationships:
-        ok = run([sys.executable, "generate_relationships.py"], "Step 0: Syncing user relationships")
+        ok = run(
+            [sys.executable, "generate_relationships.py", "--parallel", str(args.parallel)],
+            "Step 0: Syncing user relationships",
+        )
         if not ok and not args.no_abort_on_failure:
             print("Aborting.")
             sys.exit(1)
@@ -64,7 +72,8 @@ def main():
     # Step 3 (optional): build user memory (runs after content exists)
     if args.build_memory:
         run(
-            [sys.executable, "build_user_memory.py", "--all-users", "--incremental"],
+            [sys.executable, "build_user_memory.py", "--all-users", "--incremental",
+             "--parallel", str(args.parallel)],
             "Step 3: Building user memory (incremental)",
         )
 

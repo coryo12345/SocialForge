@@ -5,6 +5,7 @@ import secrets
 import json
 import random
 import string
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests as req
 from config import APP_API_URL, INTERNAL_HEADERS, llm_generate, extract_json, CURRENT_MODEL
 from random_seed import random_user_seeds
@@ -88,41 +89,57 @@ def generate_user() -> dict | None:
     return None
 
 
+def flush_users(batch: list) -> int:
+    if not batch:
+        return 0
+    resp = req.post(
+        f"{APP_API_URL}/internal/users/bulk",
+        json={"users": batch},
+        headers=INTERNAL_HEADERS,
+    )
+    if resp.ok:
+        inserted = resp.json().get("inserted", len(batch))
+        print(f"  → Batch inserted {inserted} users")
+        return inserted
+    print(f"  → Batch insert failed: {resp.status_code} {resp.text}")
+    return 0
+
+
 def main():
     parser = argparse.ArgumentParser(description="Generate AI user personas")
     parser.add_argument("--count", type=int, default=10, help="Number of users to generate")
+    parser.add_argument("--parallel", type=int, default=1,
+                        help="Number of users to generate concurrently (default: 1)")
     args = parser.parse_args()
+    args.parallel = max(1, args.parallel)
 
     users_batch = []
     total_inserted = 0
+    done = 0
     failed = 0
 
-    for i in range(args.count):
-        print(f"Generating user {i + 1}/{args.count}...", end=" ", flush=True)
-        user = generate_user()
+    with ThreadPoolExecutor(max_workers=args.parallel) as pool:
+        futures = [pool.submit(generate_user) for _ in range(args.count)]
+        for future in as_completed(futures):
+            try:
+                user = future.result()
+            except Exception as e:
+                user = None
+                print(f"Unexpected error: {e}")
+            done += 1
 
-        if user:
-            users_batch.append(user)
-            print(f"ok (@{user['username']})")
-        else:
-            failed += 1
-            print("FAILED")
-
-        # Batch insert users or at the end
-        if len(users_batch) >= 5 or (i == args.count - 1 and users_batch):
-            resp = req.post(
-                f"{APP_API_URL}/internal/users/bulk",
-                json={"users": users_batch},
-                headers=INTERNAL_HEADERS,
-            )
-            if resp.ok:
-                inserted = resp.json().get("inserted", len(users_batch))
-                total_inserted += inserted
-                print(f"  → Batch inserted {inserted} users")
+            if user:
+                users_batch.append(user)
+                print(f"[{done}/{args.count}] ok (@{user['username']})")
             else:
-                print(f"  → Batch insert failed: {resp.status_code} {resp.text}")
-            users_batch = []
+                failed += 1
+                print(f"[{done}/{args.count}] FAILED")
 
+            if len(users_batch) >= 5:
+                total_inserted += flush_users(users_batch)
+                users_batch = []
+
+    total_inserted += flush_users(users_batch)
     print(f"\nDone. {total_inserted} inserted, {failed} failed.")
 
 

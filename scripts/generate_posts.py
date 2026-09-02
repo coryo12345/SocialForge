@@ -1,4 +1,10 @@
-"""Generate AI posts using a 3-stage pipeline: Ideation → Outline → Writing."""
+"""Generate AI posts using a 3-stage pipeline: Premise → Body → Title.
+
+The body is written in one unconstrained pass as raw text. An earlier version of
+this script inserted an outline stage between premise and writing, which a small
+model needed to stay coherent but which forces essay structure — even coverage,
+logical progression, tidy conclusions — on a model that no longer needs the help.
+"""
 
 import argparse
 import random
@@ -6,9 +12,11 @@ import re
 import time
 import json
 import datetime
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests as req
 from config import APP_API_URL, INTERNAL_HEADERS, llm_generate, extract_json, load_settings, CURRENT_MODEL
-from random_seed import random_ideation_hints, random_reddit_voice
+from random_seed import random_ideation_hints, random_reddit_voice, random_reddit_excerpt
 
 
 # ── Stage prompt builders ────────────────────────────────────────────────────
@@ -39,6 +47,7 @@ def build_ideation_prompt(user: dict, community: dict, recent_titles: list[str],
 About you: {user.get('bio') or 'No bio available.'}
 Your personality: {', '.join(personality) if personality else 'curious'}.
 Your interests: {', '.join(interests) if interests else 'various topics'}.
+Your political lean: {user.get('political_lean') or 'centrist'}.
 
 You are about to write a post in r/{community['name']}.
 {narrative_instruction}
@@ -57,79 +66,78 @@ Do not be generic. Do not summarize. If your premise could apply to anyone, it i
 }}"""
 
 
-_OUTLINE_BULLET_COUNTS = {"short": "2-3", "medium": "4-5", "long": "6-8"}
+# Deliberately vague. Explicit word counts ("400-800 words") get followed so
+# precisely that every post in a length bucket comes out the same shape.
+_LENGTH_TARGETS = {
+    "short": "Keep it short — a couple of paragraphs at most.",
+    "medium": "A few paragraphs.",
+    "long": "This one runs long. Take your time with it.",
+}
+
+# Rough output ceilings so a long post is never cut off mid-sentence.
+_LENGTH_TOKENS = {"short": 400, "medium": 900, "long": 1800}
 
 
-def build_outline_prompt(user: dict, community: dict, premise: str, length_hint: str) -> str:
+def build_body_prompt(user: dict, community: dict, premise: str, length_hint: str,
+                      register_hint: str, opener: str | None, voice_rules: list[str],
+                      excerpt: str) -> str:
+    """Stage 2. Raw text out — no JSON.
+
+    Wrapping prose in a JSON string makes models write flatter and safer, and
+    forced a parse-retry on every malformed escape. The constraint list is also
+    deliberately short: a large model complies with every rule you give it, and
+    text that visibly satisfies eleven simultaneous style directives reads as
+    synthetic no matter how good each individual rule was.
+    """
     personality = json.loads(user.get("personality") or "[]")
-    is_narrative = bool(community.get("is_narrative"))
-    community_type = "personal story community" if is_narrative else "discussion community"
-    bullet_count = _OUTLINE_BULLET_COUNTS.get(length_hint, "4-5")
-    post_style_section = ""
-    if community.get("post_style_prompt"):
-        post_style_section = f"\nPosting style for this community:\n{community['post_style_prompt']}\n"
-
-    return f"""You are {user['display_name']}. You have a post idea:
-
-PREMISE: {premise}
-
-You are posting in r/{community['name']} ({community_type}).
-Your personality: {', '.join(personality) if personality else 'curious'}.
-Your political lean: {user.get('political_lean') or 'centrist'}.
-{post_style_section}
-Write {bullet_count} rough draft sentences capturing what this post will actually say.
-These are NOT structural labels like "describe the conflict" — write the actual content.
-Each entry should be a real sentence or two that you will say or describe in the post.
-Think of it as jotting down the main points before writing the full version.
-
-Respond with ONLY a **VALID** JSON object:
-{{
-  "outline": ["draft sentence 1", "draft sentence 2", ...]
-}}"""
-
-
-_LENGTH_WORD_TARGETS = {"short": "50-150", "medium": "150-350", "long": "400-800"}
-
-
-def build_writing_prompt(user: dict, community: dict, premise: str, outline: list[str],
-                         length_hint: str, opener: str, voice_rules: list[str],
-                         anti_robot: list[str]) -> str:
-    personality = json.loads(user.get("personality") or "[]")
-    numbered = "\n".join(f"{i+1}. {point}" for i, point in enumerate(outline))
-    word_target = _LENGTH_WORD_TARGETS.get(length_hint, "150-350")
     voice_block = "\n".join(f"- {r}" for r in voice_rules)
-    anti_block = "\n".join(f"- {r}" for r in anti_robot)
+
     post_style_section = ""
     if community.get("post_style_prompt"):
-        post_style_section = f"\nCOMMUNITY POSTING STYLE — follow this:\n{community['post_style_prompt']}\n"
+        post_style_section = f"\nHow people write in this community:\n{community['post_style_prompt']}\n"
 
-    return f"""You are {user['display_name']}. Write a Reddit post for r/{community['name']}.
+    opener_section = ""
+    if opener:
+        opener_section = (
+            f'\nStart somewhere near this line, in your own words:\n"{opener}"\n'
+        )
 
-YOUR PREMISE: {premise}
+    return f"""You are {user['display_name']}. Write a post for r/{community['name']}.
 
-YOUR DRAFT POINTS (cover all of these, in order):
-{numbered}
+WHAT HAPPENED / WHAT YOU WANT TO SAY:
+{premise}
 
-YOUR WRITING STYLE: {user.get('writing_style') or 'conversational, natural Reddit prose'}
-YOUR PERSONALITY: {', '.join(personality) if personality else 'curious'}
+You are feeling: {register_hint}
+How you write: {user.get('writing_style') or 'conversational, natural Reddit prose'}
+Your personality: {', '.join(personality) if personality else 'curious'}
 {post_style_section}
-VOICE — follow these:
+Here is a real post in the register I mean. Match its texture — the rhythm, the
+mess, the way it doesn't tie itself up. Do NOT reuse anything from its content:
+
+---
+{excerpt}
+---
+
 {voice_block}
+- No markdown headers and no bullet lists. This is someone typing into a text box.
+{opener_section}
+{_LENGTH_TARGETS.get(length_hint, "A few paragraphs.")}
 
-AVOID:
-{anti_block}
+Write only the post body. No title, no preamble, no quotation marks around it."""
 
-OPENER: Start your post body with or near this line — adapt it naturally, do not copy verbatim:
-"{opener}"
 
-TARGET LENGTH: {word_target} words for the body. Match this range — don't pad, don't cut short.
+def build_title_prompt(user: dict, community: dict, body: str) -> str:
+    """Stage 3. The title is written last, so it can actually match the post."""
+    return f"""Here is a post you just wrote for r/{community['name']}:
 
-Respond with ONLY valid JSON. You MUST include a title. Use commas between all properties.
-{{
-  "title": "post title (max 300 chars)",
-  "body": "full post body",
-  "flair": "Discussion / Rant / Question / Story / etc, or null"
-}}"""
+{body[:1500]}
+
+Write the title you put on it.
+
+Sound like a person, not a headline. Your writing style is: {user.get('writing_style') or 'conversational'} — if that means
+lowercase or sloppy, the title is too. Max 200 characters.
+
+Reply with the title and nothing else — no quotes, no "Title:", no markdown."""
 
 
 def build_title_only_prompt(user: dict, community: dict, premise: str) -> str:
@@ -146,23 +154,114 @@ Respond with ONLY valid JSON:
 }}"""
 
 
+# ── Output parsing ───────────────────────────────────────────────────────────
+
+_TITLE_PREFIX_RE = re.compile(r'^\s*(?:title|post title)\s*[:\-]\s*', re.IGNORECASE)
+
+
+def clean_title(raw: str | None, fallback_body: str = "") -> str | None:
+    """Pull a usable title out of a free-text model response."""
+    text = (raw or "").strip()
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        line = _TITLE_PREFIX_RE.sub("", line)
+        line = line.strip().lstrip("#*_> ").rstrip("*_ ").strip()
+        # Models like to wrap the answer in quotes despite being told not to
+        if len(line) > 1 and line[0] in "\"'\u201c\u2018" and line[-1] in "\"'\u201d\u2019":
+            line = line[1:-1].strip()
+        if line:
+            return line[:300]
+
+    # Last resort: first sentence of the body
+    first = fallback_body.strip().split("\n", 1)[0].strip()
+    if first:
+        return first[:300].rstrip(".,;:") or None
+    return None
+
+
+# Flair is derived in Python from the sampled format hint rather than asked for.
+# It was a field on the old JSON writing stage and vanished with it; deriving it
+# is both cheaper and more consistent than another model round trip.
+_FLAIR_BY_KEYWORD = [
+    ("rant", "Rant"),
+    ("vent", "Rant"),
+    ("complaint", "Rant"),
+    ("advice", "Question"),
+    ("question", "Question"),
+    ("asshole", "AITA"),
+    ("confession", "Confession"),
+    ("how-to", "Guide"),
+    ("update", "Update"),
+    ("milestone", "Update"),
+    ("win", "Update"),
+    ("revenge", "Story"),
+    ("story", "Story"),
+    ("account", "Story"),
+    ("tale", "Story"),
+    ("hot take", "Discussion"),
+    ("unpopular", "Discussion"),
+]
+
+
+def flair_for_format(format_hint: str, is_narrative: bool) -> str | None:
+    lowered = format_hint.lower()
+    for keyword, flair in _FLAIR_BY_KEYWORD:
+        if keyword in lowered:
+            return flair
+    return "Story" if is_narrative else "Discussion"
+
+
 # ── Validation ───────────────────────────────────────────────────────────────
 
-_SPECIFIC_NOUN_RE = re.compile(
-    r'\b(\d+[\.,]?\d*\s*(dollar|cent|year|month|week|day|hour|minute|k|%|lb|kg|miles?|km)?'
-    r'|\$\d+'
-    r'|[A-Z][a-z]{2,}'  # Capitalized proper noun
-    r'|yesterday|today|tomorrow|last\s+\w+|this\s+\w+)\b',
+# Premise validation is a backstop against a vacuous premise, nothing more.
+#
+# An earlier version required a digit or a proper noun to be present. That is a
+# test for a *token type*, not for specificity, and it threw away perfectly
+# concrete premises like "TIFU by systematically dismantling a local real estate
+# developer's rezoning bid" — no numbers, no proper nouns, entirely specific.
+# So the check now passes by default and only rejects on positive evidence of
+# waffle, which is the failure mode that actually matters.
+
+# Phrases that show up when the model retreats to generalities.
+_VAGUE_RE = re.compile(
+    r'\b(?:people\s+(?:these\s+days|in\s+general|nowadays|today)'
+    r"|(?:in|about)\s+(?:today's|modern)\s+(?:world|society)"
+    r'|(?:general|broader?)\s+(?:discussion|topic|question|thoughts?)'
+    r'|how\s+people\s+(?:feel|think)\s+about'
+    r'|(?:various|different|certain|some)\s+(?:things|topics|issues|aspects|ways)'
+    r'|the\s+(?:importance|impact|nature|state)\s+of'
+    r'|share\s+(?:my|some)\s+(?:thoughts|feelings)'
+    r'|society\s+(?:as\s+a\s+whole|in\s+general))\b',
     re.IGNORECASE,
 )
 
+# Any of these is enough to override a vague-phrase hit — the premise names
+# something real even if it also editorializes.
+_CONCRETE_RE = re.compile(
+    r'(\$\s?\d|\b\d'
+    r'|\b(?:my|our|his|her|their)\s+\w+'      # "my landlord", "our HOA"
+    r'|\b(?:last|this|next)\s+\w+'
+    r'|\b(?:one|two|three|four|five|six|seven|eight|nine|ten|couple|few|several)\s+'
+    r'(?:of\s+)?\w+)',
+    re.IGNORECASE,
+)
+_PROPER_NOUN_RE = re.compile(r'\b[A-Z][a-z]{2,}')
+
 
 def is_valid_premise(premise: str) -> bool:
-    if len(premise.split()) < 15:
+    words = premise.split()
+    if len(words) < 12:
         return False
-    if not _SPECIFIC_NOUN_RE.search(premise):
-        return False
-    return True
+    if not _VAGUE_RE.search(premise):
+        return True
+    # Vague phrasing is forgivable if the premise still names something concrete
+    tail = premise.split(None, 1)
+    return bool(
+        _CONCRETE_RE.search(premise)
+        or (len(tail) > 1 and _PROPER_NOUN_RE.search(tail[1]))
+    )
 
 
 # ── Utility ──────────────────────────────────────────────────────────────────
@@ -222,11 +321,15 @@ def weighted_distribution(communities: list, count: int) -> list[dict]:
 
 
 _recent_titles_cache: dict[str, list[str]] = {}
+_recent_titles_lock = threading.Lock()
 
 
 def fetch_recent_post_titles(community_name: str, limit: int = 10) -> list[str]:
-    if community_name in _recent_titles_cache:
-        return _recent_titles_cache[community_name]
+    with _recent_titles_lock:
+        cached = _recent_titles_cache.get(community_name)
+    if cached is not None:
+        return cached
+    titles: list[str] = []
     try:
         resp = req.get(
             f"{APP_API_URL}/communities/{community_name}/posts",
@@ -235,46 +338,78 @@ def fetch_recent_post_titles(community_name: str, limit: int = 10) -> list[str]:
         )
         if resp.ok:
             titles = [p["title"] for p in resp.json().get("items", [])]
-            _recent_titles_cache[community_name] = titles
-            return titles
     except Exception:
         pass
+    with _recent_titles_lock:
+        return _recent_titles_cache.setdefault(community_name, titles)
+
+
+def note_generated_title(community_name: str, title: str, keep: int = 25) -> None:
+    """Feed a just-generated title back into the avoid-list.
+
+    Without this the cache is a snapshot from startup, so posts generated in the
+    same run can't see each other and near-duplicates show up within one batch.
+    """
+    with _recent_titles_lock:
+        titles = _recent_titles_cache.setdefault(community_name, [])
+        titles.insert(0, title)
+        del titles[keep:]
+
+
+class UserPool:
+    """A pre-fetched pool of users, drawn from at random.
+
+    Replaces one HTTP round trip per post against /internal/users/random, which
+    at high parallelism is a lot of traffic for a value we can batch.
+    """
+
+    def __init__(self, size: int):
+        self.lock = threading.Lock()
+        self.users = fetch_random_users(size)
+
+    def take(self) -> dict | None:
+        with self.lock:
+            if not self.users:
+                return None
+            return random.choice(self.users)
+
+
+def fetch_random_users(count: int) -> list:
+    try:
+        resp = req.get(
+            f"{APP_API_URL}/internal/users/random",
+            params={"count": count},
+            headers=INTERNAL_HEADERS,
+            timeout=30,
+        )
+        if resp.ok:
+            return resp.json()
+        print(f"  Failed to fetch users: {resp.status_code}")
+    except Exception as e:
+        print(f"  Failed to fetch users: {e}")
     return []
-
-
-def fetch_random_user() -> dict | None:
-    resp = req.get(
-        f"{APP_API_URL}/internal/users/random",
-        params={"count": 1},
-        headers=INTERNAL_HEADERS,
-        timeout=10,
-    )
-    if resp.ok:
-        users = resp.json()
-        return users[0] if users else None
-    return None
 
 
 # ── 3-stage pipeline ─────────────────────────────────────────────────────────
 
-def generate_post_3stage(
+def generate_post(
     user: dict,
     community: dict,
     recent_titles: list[str],
     target_date: datetime.date,
     temp_ideation: float,
-    temp_outline: float,
     temp_writing: float,
+    temp_title: float,
     viral_prob: float,
 ) -> dict | None:
     is_narrative = bool(community.get("is_narrative"))
     format_hint, length_hint, register_hint, angle_hint = random_ideation_hints(is_narrative)
 
-    # Stage 1: Ideation
+    # ── Stage 1: Premise ─────────────────────────────────────────────────────
     ideation_prompt = build_ideation_prompt(
         user, community, recent_titles, format_hint, register_hint, angle_hint
     )
-    raw1 = llm_generate(ideation_prompt, temperature=temp_ideation)
+    raw1 = llm_generate(ideation_prompt, temperature=temp_ideation, n_predict=250)
     data1 = extract_json(raw1)
     if not data1 or not data1.get("premise"):
         print(f"    Stage 1 failed: no premise")
@@ -283,7 +418,7 @@ def generate_post_3stage(
     premise = str(data1["premise"]).strip()
     if not is_valid_premise(premise):
         # One retry
-        raw1b = llm_generate(ideation_prompt, temperature=temp_ideation)
+        raw1b = llm_generate(ideation_prompt, temperature=temp_ideation, n_predict=250)
         data1b = extract_json(raw1b)
         if data1b and data1b.get("premise"):
             premise = str(data1b["premise"]).strip()
@@ -297,76 +432,69 @@ def generate_post_3stage(
     now = int(time.time())
     score, upvotes, downvotes = random_score(viral_prob)
 
-    # Short-circuit: title-only posts skip outline + full writing
-    if is_title_only:
-        title_prompt = build_title_only_prompt(user, community, premise)
-        raw_t = llm_generate(title_prompt, temperature=temp_writing, n_predict=1024)
-        data_t = extract_json(raw_t)
-        if not data_t or not data_t.get("title"):
-            print(f"    Title-only generation failed")
-            return None
+    def build_post(title: str, body: str, flair: str | None) -> dict:
         return {
             "community_name": community["name"],
             "username": user["username"],
-            "title": str(data_t["title"])[:300],
-            "body": "",
+            "title": title[:300],
+            "body": body,
             "post_type": "text",
             "score": score,
             "upvote_count": upvotes,
             "downvote_count": downvotes,
-            "flair": None,
+            "flair": flair,
             "model": CURRENT_MODEL,
             "scheduled_at": random_scheduled_at(target_date),
             "created_at": now,
             "updated_at": now,
         }
 
-    # Stage 2: Outline (with dynamic bullet count from length_hint)
-    outline_prompt = build_outline_prompt(user, community, premise, length_hint)
-    raw2 = llm_generate(outline_prompt, temperature=temp_outline)
-    data2 = extract_json(raw2)
-    if not data2 or not isinstance(data2.get("outline"), list) or len(data2["outline"]) < 2:
-        print(f"    Stage 2 failed: no outline")
-        return None
+    # Short-circuit: title-only posts have no body to title afterwards
+    if is_title_only:
+        title_prompt = build_title_only_prompt(user, community, premise)
+        raw_t = llm_generate(title_prompt, temperature=temp_title, n_predict=256)
+        data_t = extract_json(raw_t)
+        if not data_t or not data_t.get("title"):
+            print(f"    Title-only generation failed")
+            return None
+        return build_post(str(data_t["title"]), "", flair_for_format(format_hint, is_narrative))
 
-    max_bullets = int(_OUTLINE_BULLET_COUNTS.get(length_hint, "4-5").split("-")[1])
-    outline = [str(b) for b in data2["outline"][:max_bullets]]
-
-    # Stage 3: Writing (with Reddit voice injection)
-    opener, voice_rules, anti_robot = random_reddit_voice()
-    writing_prompt = build_writing_prompt(
-        user, community, premise, outline, length_hint, opener, voice_rules, anti_robot
+    # ── Stage 2: Body (raw text) ─────────────────────────────────────────────
+    # The opener is a strong steer, and there are only 25 of them. Applying one
+    # to every post makes the repetition obvious across a few hundred posts.
+    opener, voice_rules, _anti_robot = random_reddit_voice()
+    body_prompt = build_body_prompt(
+        user=user,
+        community=community,
+        premise=premise,
+        length_hint=length_hint,
+        register_hint=register_hint,
+        opener=opener if random.random() < 0.3 else None,
+        voice_rules=voice_rules[:2],
+        excerpt=random_reddit_excerpt(),
     )
-    raw3 = llm_generate(writing_prompt, temperature=temp_writing)
-    data3 = extract_json(raw3)
-    if not data3:
-        print(f"    Stage 3: Not valid JSON, trying again...")
-        raw3 = llm_generate(writing_prompt, temperature=temp_writing)
-        data3 = extract_json(raw3)
-    if not data3:
-        print(f"    Stage 3 failed: invalid JSON")
-        return None
-    if "title" not in data3:
-        print(f"    Stage 3 failed: no title in output")
+    body = llm_generate(
+        body_prompt,
+        temperature=temp_writing,
+        n_predict=_LENGTH_TOKENS.get(length_hint, 900),
+    )
+    body = (body or "").strip()
+    if len(body) < 40:
+        print(f"    Stage 2 failed: body too short ({len(body)} chars)")
         return None
 
-    body = str(data3.get("body") or "")
+    # ── Stage 3: Title, written from the finished body ───────────────────────
+    raw_title = llm_generate(
+        build_title_prompt(user, community, body),
+        temperature=temp_title,
+        n_predict=100,
+    )
+    title = clean_title(raw_title, fallback_body=body)
+    if not title:
+        print(f"    Stage 3 failed: no usable title")
+        return None
 
-    return {
-        "community_name": community["name"],
-        "username": user["username"],
-        "title": str(data3["title"])[:300],
-        "body": body,
-        "post_type": "text",
-        "score": score,
-        "upvote_count": upvotes,
-        "downvote_count": downvotes,
-        "flair": data3.get("flair"),
-        "model": CURRENT_MODEL,
-        "scheduled_at": random_scheduled_at(target_date),
-        "created_at": now,
-        "updated_at": now,
-    }
+    return build_post(title, body, flair_for_format(format_hint, is_narrative))
 
 
 # ── Main ─────────────────────────────────────────────────────────────────────
@@ -376,14 +504,17 @@ def main():
     parser.add_argument("--date", default="today", help="Date in YYYY-MM-DD format or 'today'")
     parser.add_argument("--count", type=int, default=None, help="Number of posts to generate")
     parser.add_argument("--community", default=None, help="Only generate for this community slug")
+    parser.add_argument("--parallel", type=int, default=1,
+                        help="Number of posts to generate concurrently (default: 1)")
     args = parser.parse_args()
+    args.parallel = max(1, args.parallel)
 
     settings = load_settings()
     viral_prob = float(settings.get("viral_post_probability", 0.05))
 
-    temp_ideation = float(settings.get("post_ideation_temperature", 0.9))
-    temp_outline = float(settings.get("post_outline_temperature", 0.75))
-    temp_writing = float(settings.get("post_writing_temperature", 0.7))
+    temp_ideation = float(settings.get("post_ideation_temperature", 1.1))
+    temp_writing = float(settings.get("post_writing_temperature", 1.0))
+    temp_title = float(settings.get("post_title_temperature", 1.0))
 
     count_min = int(settings.get("posts_per_day_min", 50))
     count_max = int(settings.get("posts_per_day_max", 150))
@@ -394,8 +525,8 @@ def main():
         if args.date == "today"
         else datetime.date.fromisoformat(args.date)
     )
-    print(f"Generating {post_count} posts for {target_date} (3-stage pipeline)")
-    print(f"Temperatures: ideation={temp_ideation}, outline={temp_outline}, writing={temp_writing}")
+    print(f"Generating {post_count} posts for {target_date} (premise → body → title)")
+    print(f"Temperatures: ideation={temp_ideation}, writing={temp_writing}, title={temp_title}")
 
     params = {}
     if args.community:
@@ -413,41 +544,55 @@ def main():
         return
 
     distribution = weighted_distribution(communities, post_count)
+    tasks = [item["community"] for item in distribution for _ in range(item["count"])]
+    for c in communities:
+        fetch_recent_post_titles(c["name"])
+
+    user_pool = UserPool(min(max(post_count, 25), 200))
+    if not user_pool.users:
+        print("No users found. Run generate_users.py first.")
+        return
+
+    def generate_one(community: dict) -> dict | None:
+        user = user_pool.take()
+        if not user:
+            print(f"  No users found for r/{community['name']}, skipping")
+            return None
+        post = generate_post(
+            user=user,
+            community=community,
+            # copy: note_generated_title mutates the cached list from other threads
+            recent_titles=list(fetch_recent_post_titles(community["name"])),
+            target_date=target_date,
+            temp_ideation=temp_ideation,
+            temp_writing=temp_writing,
+            temp_title=temp_title,
+            viral_prob=viral_prob,
+        )
+        if post:
+            note_generated_title(post["community_name"], post["title"])
+        return post
+
     batch = []
     total_inserted = 0
     generated = 0
     failed = 0
 
-    for item in distribution:
-        community = item["community"]
-        recent_titles = fetch_recent_post_titles(community["name"])
-
-        for _ in range(item["count"]):
-            user = fetch_random_user()
-            if not user:
-                print(f"  No users found for r/{community['name']}, skipping")
-                failed += 1
-                continue
-
-            print(f"  [{community['name']}] @{user['username']} — generating...")
-            post = generate_post_3stage(
-                user=user,
-                community=community,
-                recent_titles=recent_titles,
-                target_date=target_date,
-                temp_ideation=temp_ideation,
-                temp_outline=temp_outline,
-                temp_writing=temp_writing,
-                viral_prob=viral_prob,
-            )
-
+    with ThreadPoolExecutor(max_workers=args.parallel) as pool:
+        futures = [pool.submit(generate_one, c) for c in tasks]
+        for future in as_completed(futures):
+            try:
+                post = future.result()
+            except Exception as e:
+                post = None
+                print(f"  Unexpected error: {e}")
             if not post:
                 failed += 1
                 continue
 
-            batch.append(post)
             generated += 1
-            print(f"    Title: {post['title'][:60]}")
+            batch.append(post)
+            print(f"  [{generated + failed}/{len(tasks)}] [{post['community_name']}] {post['title'][:60]}")
             if len(batch) >= 5:
                 total_inserted += flush_posts(batch)
                 batch.clear()
